@@ -1,5 +1,8 @@
+import os
 import asyncio
 from struct import Struct
+import os.path as opath
+
 
 RRQ = b'\x01\x00'
 WRQ = b'\x02\x00'
@@ -19,6 +22,7 @@ class WRQServer(object):
 
 
 class RRQServer(object):
+    # add logging
     # add timeouts
     def __init__(self, rrq, addr):
         print("creating rrq on {}".format(addr))
@@ -26,12 +30,11 @@ class RRQServer(object):
         filename, _ = self.validate_req(*self.parse_req(rrq))
         self.file_iterator = self.get_file_iterator(filename)
         self.counter = 1
+        # rename
         self.two_b_packer = byte_packer(1)
 
     def validate_req(self, fname, mode):
-        # validate existence
-        # validate permissions
-        # validate if under process root
+        # validate format and opts
         return (fname.decode(encoding='ascii'), mode,)
 
     def parse_req(self, req):
@@ -75,15 +78,33 @@ class RRQServer(object):
                        next(self.file_iterator()))
         return pkt
 
-    def get_file_iterator(self, fname):
-        def iterator():
-            with open(fname, 'rb') as f:
-                while True:
-                    contents = f.read(READSIZE)
-                    if not contents:
-                        break
-                    yield contents
+    def sanitize_fname(self, fname):
+        root_dir = os.getcwd()
+        return opath.join(
+            root_dir,
+            opath.normpath(
+                '/' + fname).lstrip('/'))
 
+    def get_file_iterator(self, fname):
+        fpath = self.sanitize_fname(fname)
+        # nice to separate into reader/writer with partial func-like
+
+        def iterator():
+            try:
+                # xb
+                # rb
+                with open(fpath, 'rb') as f:
+                    while True:
+                        contents = f.read(READSIZE)
+                        if not contents:
+                            break
+                        yield contents
+            except FileExistsError:
+                pass
+            except PermissionError:
+                pass
+            except FileNotFoundError:
+                pass
         return iterator()
 
     def connection_lost(self, exc):
