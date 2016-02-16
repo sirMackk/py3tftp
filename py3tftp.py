@@ -11,11 +11,13 @@ DAT = b'\x03\x00'
 ACK = b'\x04\x00'
 ERR = b'\x05\x00'
 READSIZE = 512
+ACK_TIMEOUT = 0.5
+CONN_TIMEOUT = 3.0
 TWOBYTE = Struct('=H')
 
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(message)s',
-    level=logging.DEBUG)
+    level=logging.INFO)
 
 
 def byte_packer(length):
@@ -27,7 +29,6 @@ class WRQServer(object):
 
 
 class RRQServer(object):
-    # add timeouts
     def __init__(self, rrq, addr):
         logging.info("Starting RRQServer, sending file to {}".format(
             addr))
@@ -36,6 +37,11 @@ class RRQServer(object):
         self.file_iterator = self.get_file_iterator(filename)
         self.counter = 1
         self.short_int = byte_packer(1)
+
+    def conn_timeout(self):
+        logging.error("Connection to {} timed out".format(self.addr))
+        self.retransmit.cancel()
+        self.transport.close()
 
     def validate_req(self, fname, mode):
         # validate format and opts
@@ -49,24 +55,47 @@ class RRQServer(object):
 
     def connection_made(self, transport):
         self.transport = transport
-        self.transport.sendto(next(self.file_iterator))
+        last_pkt = next(self.file_iterator)
+        self.transmit(last_pkt)
+
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
+
+    def transmit(self, pkt):
+        self.transport.sendto(pkt)
+        self.retransmit = asyncio.get_event_loop().call_later(
+            ACK_TIMEOUT, self.transmit, pkt)
 
     def datagram_received(self, data, addr):
+        self.h_timeout.cancel()
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
+
         logging.debug("Receiving dgram, length: {}".format(len(data)))
         if self.is_ack(data) and self.correct_ack(data):
+            if self.retransmit:
+                self.retransmit.cancel()
             try:
                 self.counter += 1
                 logging.debug("sending!")
-                self.transport.sendto(next(self.file_iterator))
+                last_pkt = next(self.file_iterator)
+
+                self.transmit(last_pkt)
+
             except StopIteration:
-                self.info("File transfer complete")
+                logging.info("File transfer complete")
                 self.transport.close()
         else:
+            logging.debug("ack: {}".format(data))
             logging.debug("is_ack? {}".format(self.is_ack(data)))
             logging.debug("correct_ack? {}".format(self.correct_ack(data)))
+            logging.debug("counter: {}".format(self.counter))
 
     def error_received(self, exc):
-        logging.error("Error receiving packet: {}".format(exc))
+        self.h_timeout.cancel()
+        self.retransmit.cancel()
+        logging.error("Error receiving packet from {0}: {1}".format(self.addr,
+                                                                    exc))
 
     def is_ack(self, data):
         return data[:2] == ACK
@@ -113,6 +142,7 @@ class RRQServer(object):
         return iterator()
 
     def connection_lost(self, exc):
+        self.h_timeout.cancel()
         logging.info("Connection to {0}:{1} terminated".format(*self.addr))
         # might remove
         logging.info(exc)
@@ -166,7 +196,7 @@ if __name__ == '__main__':
     try:
         loop.run_forever()
     except KeyboardInterrupt:
-        log.info('Received signal, shutting down')
+        logging.info('Received signal, shutting down')
 
     transport.close()
     loop.close()
