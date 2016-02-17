@@ -13,6 +13,31 @@ READSIZE = 512
 ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
+# send err packets when required
+# asyncio file io?
+
+
+class SafeOpen(object):
+    def __init__(self, fname, mode):
+        self.fname = fname
+        self.mode = mode
+
+    def __enter__(self):
+        try:
+            self.file = open(self.fname, self.mode)
+        except FileExistsError:
+            logging.error("{} already exists! Cannot overwrite".format(
+                self.fname))
+        except PermissionError:
+            logging.error("Insufficient permissions to operate on {}".format(
+                self.fname))
+        except FileNotFoundError:
+            logging.error("{} does not exist!".format(self.fname))
+        return self.file
+
+    def __exit__(self, *exc):
+        self.file.close()
+
 
 class BaseTftpServer(object):
     def __init__(self, request, remote_addr):
@@ -28,18 +53,11 @@ class BaseTftpServer(object):
         logging.debug("Parsed request: {}".format(rq))
         return rq[0], rq[1]
 
-    def pack_short_int(self, number):
+    def pack_short(self, number):
         return number.to_bytes(2, byteorder='little')
 
-    def unpack_short_int(self, data):
+    def unpack_short(self, data):
         return int.from_bytes(data, byteorder='little')
-
-    def is_ack(self, data):
-        return data[:2] == ACK
-
-    def correct_ack(self, data):
-        ack_count = self.unpack_short_int(data[2:4])
-        return self.counter == ack_count
 
     def sanitize_fname(self, fname):
         root_dir = os.getcwd()
@@ -50,22 +68,22 @@ class BaseTftpServer(object):
 
     def connection_lost(self, exc):
         self.h_timeout.cancel()
-        logging.info("Connection to {0}:{1} terminated".format(*self.remote_addr))
-        # might remove
+        logging.info("Connection to {0}:{1} terminated".format(
+            *self.remote_addr))
         logging.info(exc)
 
     def error_received(self, exc):
         self.h_timeout.cancel()
         self.retransmit.cancel()
-        logging.error("Error receiving packet from {0}: {1}".format(self.remote_addr,
-                                                                    exc))
+        logging.error("Error receiving packet from {0}: {1}".format(
+            self.remote_addr, exc))
 
     def transmit(self, pkt):
         self.transport.sendto(pkt)
         self.retransmit = asyncio.get_event_loop().call_later(
             ACK_TIMEOUT, self.transmit, pkt)
 
-    def opening_packet(self, packet):
+    def send_opening_packet(self, packet):
         self.transmit(packet)
         self.h_timeout = asyncio.get_event_loop().call_later(
             CONN_TIMEOUT, self.conn_timeout)
@@ -80,23 +98,67 @@ class BaseTftpServer(object):
         self.h_timeout = asyncio.get_event_loop().call_later(
             CONN_TIMEOUT, self.conn_timeout)
 
-    def datagram_received(self, data, addr):
-        raise NotImplementedError
-
     def connection_made(self, transport):
         raise NotImplementedError
 
+    def datagram_received(self, data, addr):
+        raise NotImplementedError
 
-class WRQServer(object):
-    pass
-    # def get_file_writer(self, fname):
-        # except FileExistsError:
-            # logging.error("{} already exists! Cannot overwrite".format(
-                # fpath))
-        # except PermissionError:
-            # logging.error("Insufficient permissions to read {}".format(
-                # fpath))
-        # # xb
+
+class WRQServer(BaseTftpServer):
+    def __init__(self, wrq, addr):
+        logging.info("Starting WRQServer, recving file from {}".format(
+            addr))
+        super().__init__(wrq, addr)
+
+    def is_data(self, data):
+        return data[:2] == DAT
+
+    def is_correct_data(self, data):
+        data_no = self.unpack_short(data[2:4])
+        return self.counter + 1 == data_no
+
+    def current_ack(self):
+        return ACK + self.pack_short(self.counter)
+
+    def connection_made(self, transport):
+        self.transport = transport
+        self.counter = 0
+        self.file_writer = self.get_file_writer(self.filename)
+        pkt = self.current_ack()
+        self.send_opening_packet(pkt)
+
+    def datagram_received(self, data, addr):
+        self.conn_timeout_reset()
+
+        if self.is_data(data) and self.correct_data(data):
+            if self.retransmit:
+                self.retransmit.cancel()
+
+            self.counter += 1
+            self.file_writer(data)
+            self.transmit(self.current_ack())
+
+            if len(data) < READSIZE:
+                self.file_writer(None)
+                self.transport.close()
+        else:
+            logging.debug("data: {0}; is_data: {1}; counter: {2}".format(
+                data, self.is_data(data), self.counter))
+
+    def get_file_writer(self, fname):
+        fpath = self.sanitize_fname(fname)
+
+        def iterator():
+            with SafeOpen(fpath, 'xb') as f:
+                while True:
+                    data = yield
+                    if not data:
+                        raise StopIteration
+                    f.write(data)
+        writer = iterator()
+        writer.send(None)
+        return writer
 
 
 class RRQServer(BaseTftpServer):
@@ -105,13 +167,19 @@ class RRQServer(BaseTftpServer):
             addr))
         super().__init__(rrq, addr)
 
+    def is_ack(self, data):
+        return data[:2] == ACK
+
+    def correct_ack(self, data):
+        ack_count = self.unpack_short(data[2:4])
+        return self.counter == ack_count
+
     def connection_made(self, transport):
+        self.transport = transport
         self.counter = 1
         self.file_reader = self.get_file_reader(self.filename)
-        self.transport = transport
-        packet = next(self.file_reader)
-        self.opening_packet(packet)
-
+        pkt = next(self.file_reader)
+        self.send_opening_packet(pkt)
 
     def datagram_received(self, data, addr):
         self.conn_timeout_reset()
@@ -136,15 +204,9 @@ class RRQServer(BaseTftpServer):
         fpath = self.sanitize_fname(fname)
 
         def iterator():
-            try:
-                with open(fpath, 'rb') as f:
-                    for chunk in iter(lambda: f.read(READSIZE), b''):
-                        yield chunk
-            except PermissionError:
-                logging.error("Insufficient permissions to read {}".format(
-                    fpath))
-            except FileNotFoundError:
-                logging.error("{} does not exist!".format(fpath))
+            with SafeOpen(fpath, 'rb') as f:
+                for chunk in iter(lambda: f.read(READSIZE), b''):
+                    yield chunk
         return iterator()
 
 

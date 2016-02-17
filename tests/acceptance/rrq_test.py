@@ -4,6 +4,7 @@ import struct
 import hashlib
 from io import BytesIO
 from os import remove as rm
+from os.path import exists
 
 
 ACK = b'\x04\x00'
@@ -87,41 +88,42 @@ class TestRRQ(unittest.TestCase):
         self.assertEqual((max_msgs - 1) * 512, len(received))
 
 
-# class TestWRQ(unittest.TestCase):
-    # @classmethod
-    # def setUpClass(cls):
-        # cls.license = BytesIO()
-        # with open('LICENSE', 'rb') as f:
-            # license = f.read()
-            # cls.license.write(license)
-            # cls.license.seek(0)
-            # cls.license_md5 = hashlib.md5(license).hexdigest()
-        # cls.serverAddr = ('127.0.0.1', 8069,)
-        # cls.wrq = b'\x02\x00LICENSE_TEST\x00binary\x00'
+class TestWRQ(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.license_buf = BytesIO()
+        with open('LICENSE', 'rb') as f:
+            license = f.read()
+            cls.license_buf.write(license)
+            cls.license_buf.seek(0)
+            cls.license_md5 = hashlib.md5(license).hexdigest()
+        cls.serverAddr = ('127.0.0.1', 8069,)
+        cls.wrq = b'\x02\x00LICENSE_TEST\x00binary\x00'
 
-    # def setUp(self):
-        # self.license = iter(lambda: self.license.read(512), '')
-        # self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # self.counter = 0
-        # self.s.sendto(self.wrq, self.serverAddr)
+    def setUp(self):
+        if exists('LICENSE_TEST'):
+            rm('LICENSE_TEST')
+        self.license = iter(lambda: self.license_buf.read(512), b'')
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.counter = 0
+        self.s.sendto(self.wrq, self.serverAddr)
 
-    # def tearDown(self):
-        # self.license.seek(0)
-        # self.s.close()
-        # rm('LICENSE_TEST')
+    def tearDown(self):
+        self.license_buf.seek(0)
+        self.s.close()
 
-    # def test_perfect_transfer(self):
-        # ack, server = self.s.recvfrom(512)
-        # for chunk in self.license:
-            # self.assertEqual(ack, ACK + struct.pack('=H', self.counter))
-            # self.s.sendto(chunk, server)
+    def test_perfect_transfer(self):
+        ack, server = self.s.recvfrom(512)
+        for chunk in self.license:
+            self.assertEqual(ack, ACK + struct.pack('=H', self.counter))
+            self.s.sendto(chunk, server)
 
-        # with open('LICENSE_TEST', 'rb') as f:
-            # license_test = f.read()
-            # license_test_md5 = hashlib.md5(license_test).hexdigest()
+        with open('LICENSE_TEST', 'rb') as f:
+            license_test = f.read()
+            license_test_md5 = hashlib.md5(license_test).hexdigest()
 
-        # self.assertEqual(len(license_test), self.license.len)
-        # self.assertEqual(self.license_md5, license_test_md5)
+        self.assertEqual(len(license_test), self.license_buf.tell())
+        self.assertEqual(self.license_md5, license_test_md5)
 
 if __name__ == '__main__':
     unittest.main()
