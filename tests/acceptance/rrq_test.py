@@ -5,9 +5,11 @@ import hashlib
 from io import BytesIO
 from os import remove as rm
 from os.path import exists
+from time import sleep
 
 
 ACK = b'\x04\x00'
+DAT = b'\x03\x00'
 
 
 class TestRRQ(unittest.TestCase):
@@ -70,6 +72,7 @@ class TestRRQ(unittest.TestCase):
         self.assertTrue(self.license_md5 == received_md5)
 
     def test_total_timeout(self):
+        # raises errno 111 in server - handle better
         max_msgs = 15
         while True:
             self.data, server = self.s.recvfrom(512)
@@ -105,7 +108,6 @@ class TestWRQ(unittest.TestCase):
             rm('LICENSE_TEST')
         self.license = iter(lambda: self.license_buf.read(512), b'')
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.counter = 0
         self.s.sendto(self.wrq, self.serverAddr)
 
     def tearDown(self):
@@ -113,11 +115,14 @@ class TestWRQ(unittest.TestCase):
         self.s.close()
 
     def test_perfect_transfer(self):
-        ack, server = self.s.recvfrom(512)
-        for chunk in self.license:
-            self.assertEqual(ack, ACK + struct.pack('=H', self.counter))
-            self.s.sendto(chunk, server)
+        for i, chunk in enumerate(self.license):
+            ack, server = self.s.recvfrom(512)
+            self.assertEqual(ack, ACK + struct.pack('=H', i))
+            self.s.sendto(DAT + (i + 1).to_bytes(2,
+                                                 byteorder='little') + chunk,
+                          server)
 
+        sleep(1)
         with open('LICENSE_TEST', 'rb') as f:
             license_test = f.read()
             license_test_md5 = hashlib.md5(license_test).hexdigest()

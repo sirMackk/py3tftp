@@ -70,7 +70,8 @@ class BaseTftpServer(object):
         self.h_timeout.cancel()
         logging.info("Connection to {0}:{1} terminated".format(
             *self.remote_addr))
-        logging.info(exc)
+        if exc:
+            logging.error(exc)
 
     def error_received(self, exc):
         self.h_timeout.cancel()
@@ -131,16 +132,18 @@ class WRQServer(BaseTftpServer):
     def datagram_received(self, data, addr):
         self.conn_timeout_reset()
 
-        if self.is_data(data) and self.correct_data(data):
+        if self.is_data(data) and self.is_correct_data(data):
             if self.retransmit:
                 self.retransmit.cancel()
 
             self.counter += 1
-            self.file_writer(data)
             self.transmit(self.current_ack())
-
-            if len(data) < READSIZE:
-                self.file_writer(None)
+            try:
+                self.file_writer.send(data[4:])
+            except StopIteration:
+                logging.info("Receiving file from {} completed".format(
+                    self.remote_addr))
+                self.retransmit.cancel()
                 self.transport.close()
         else:
             logging.debug("data: {0}; is_data: {1}; counter: {2}".format(
@@ -153,9 +156,9 @@ class WRQServer(BaseTftpServer):
             with SafeOpen(fpath, 'xb') as f:
                 while True:
                     data = yield
-                    if not data:
-                        raise StopIteration
                     f.write(data)
+                    if len(data) < READSIZE:
+                        raise StopIteration
         writer = iterator()
         writer.send(None)
         return writer
@@ -194,7 +197,8 @@ class RRQServer(BaseTftpServer):
                 packet = next(self.file_reader)
                 self.transmit(packet)
             except StopIteration:
-                logging.info("File transfer complete")
+                logging.info("Sending file to {} completed".format(
+                    self.remote_addr))
                 self.transport.close()
         else:
             logging.debug("ack: {0}; is_ack: {1}; counter: {2}".format(
