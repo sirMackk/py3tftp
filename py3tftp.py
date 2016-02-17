@@ -1,7 +1,6 @@
 import os
 import logging
 import asyncio
-from struct import Struct
 import os.path as opath
 
 
@@ -13,38 +12,14 @@ ERR = b'\x05\x00'
 READSIZE = 512
 ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
-TWOBYTE = Struct('=H')
-
-logging.basicConfig(
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    level=logging.INFO)
 
 
-def byte_packer(length):
-    return Struct('={length}H'.format(length=length))
-
-
-class WRQServer(object):
-    pass
-
-
-class RRQServer(object):
-    def __init__(self, rrq, addr):
-        logging.info("Starting RRQServer, sending file to {}".format(
-            addr))
-        self.addr = addr
-        filename, _ = self.validate_req(*self.parse_req(rrq))
-        self.file_iterator = self.get_file_iterator(filename)
-        self.counter = 1
-        self.short_int = byte_packer(1)
-
-    def conn_timeout(self):
-        logging.error("Connection to {} timed out".format(self.addr))
-        self.retransmit.cancel()
-        self.transport.close()
+class BaseTftpServer(object):
+    def __init__(self, request, remote_addr):
+        self.remote_addr = remote_addr
+        self.filename, _ = self.validate_req(*self.parse_req(request))
 
     def validate_req(self, fname, mode):
-        # validate format and opts
         return (fname.decode(encoding='ascii'), mode,)
 
     def parse_req(self, req):
@@ -53,62 +28,18 @@ class RRQServer(object):
         logging.debug("Parsed request: {}".format(rq))
         return rq[0], rq[1]
 
-    def connection_made(self, transport):
-        self.transport = transport
-        last_pkt = next(self.file_iterator)
-        self.transmit(last_pkt)
+    def pack_short_int(self, number):
+        return number.to_bytes(2, byteorder='little')
 
-        self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
-
-    def transmit(self, pkt):
-        self.transport.sendto(pkt)
-        self.retransmit = asyncio.get_event_loop().call_later(
-            ACK_TIMEOUT, self.transmit, pkt)
-
-    def datagram_received(self, data, addr):
-        self.h_timeout.cancel()
-        self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
-
-        logging.debug("Receiving dgram, length: {}".format(len(data)))
-        if self.is_ack(data) and self.correct_ack(data):
-            if self.retransmit:
-                self.retransmit.cancel()
-            try:
-                self.counter += 1
-                logging.debug("sending!")
-                last_pkt = next(self.file_iterator)
-
-                self.transmit(last_pkt)
-
-            except StopIteration:
-                logging.info("File transfer complete")
-                self.transport.close()
-        else:
-            logging.debug("ack: {}".format(data))
-            logging.debug("is_ack? {}".format(self.is_ack(data)))
-            logging.debug("correct_ack? {}".format(self.correct_ack(data)))
-            logging.debug("counter: {}".format(self.counter))
-
-    def error_received(self, exc):
-        self.h_timeout.cancel()
-        self.retransmit.cancel()
-        logging.error("Error receiving packet from {0}: {1}".format(self.addr,
-                                                                    exc))
+    def unpack_short_int(self, data):
+        return int.from_bytes(data, byteorder='little')
 
     def is_ack(self, data):
         return data[:2] == ACK
 
     def correct_ack(self, data):
-        ack_count, = self.short_int.unpack(data[2:4])
+        ack_count = self.unpack_short_int(data[2:4])
         return self.counter == ack_count
-
-    def next_data_pkt(self):
-        pkt = b''.join(DAT,
-                       self.short_int.pack(self.counter),
-                       next(self.file_iterator()))
-        return pkt
 
     def sanitize_fname(self, fname):
         root_dir = os.getcwd()
@@ -117,35 +48,104 @@ class RRQServer(object):
             opath.normpath(
                 '/' + fname).lstrip('/'))
 
-    def get_file_iterator(self, fname):
+    def connection_lost(self, exc):
+        self.h_timeout.cancel()
+        logging.info("Connection to {0}:{1} terminated".format(*self.remote_addr))
+        # might remove
+        logging.info(exc)
+
+    def error_received(self, exc):
+        self.h_timeout.cancel()
+        self.retransmit.cancel()
+        logging.error("Error receiving packet from {0}: {1}".format(self.remote_addr,
+                                                                    exc))
+
+    def transmit(self, pkt):
+        self.transport.sendto(pkt)
+        self.retransmit = asyncio.get_event_loop().call_later(
+            ACK_TIMEOUT, self.transmit, pkt)
+
+    def opening_packet(self, packet):
+        self.transmit(packet)
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
+
+    def conn_timeout(self):
+        logging.error("Connection to {} timed out".format(self.remote_addr))
+        self.retransmit.cancel()
+        self.transport.close()
+
+    def conn_timeout_reset(self):
+        self.h_timeout.cancel()
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
+
+    def datagram_received(self, data, addr):
+        raise NotImplementedError
+
+    def connection_made(self, transport):
+        raise NotImplementedError
+
+
+class WRQServer(object):
+    pass
+    # def get_file_writer(self, fname):
+        # except FileExistsError:
+            # logging.error("{} already exists! Cannot overwrite".format(
+                # fpath))
+        # except PermissionError:
+            # logging.error("Insufficient permissions to read {}".format(
+                # fpath))
+        # # xb
+
+
+class RRQServer(BaseTftpServer):
+    def __init__(self, rrq, addr):
+        logging.info("Starting RRQServer, sending file to {}".format(
+            addr))
+        super().__init__(rrq, addr)
+
+    def connection_made(self, transport):
+        self.counter = 1
+        self.file_reader = self.get_file_reader(self.filename)
+        self.transport = transport
+        packet = next(self.file_reader)
+        self.opening_packet(packet)
+
+
+    def datagram_received(self, data, addr):
+        self.conn_timeout_reset()
+
+        logging.debug("Receiving dgram, length: {}".format(len(data)))
+        if self.is_ack(data) and self.correct_ack(data):
+            if self.retransmit:
+                self.retransmit.cancel()
+            try:
+                self.counter += 1
+                logging.debug("sending!")
+                packet = next(self.file_reader)
+                self.transmit(packet)
+            except StopIteration:
+                logging.info("File transfer complete")
+                self.transport.close()
+        else:
+            logging.debug("ack: {0}; is_ack: {1}; counter: {2}".format(
+                data, self.is_ack(data), self.counter))
+
+    def get_file_reader(self, fname):
         fpath = self.sanitize_fname(fname)
-        # nice to separate into reader/writer with partial func-like
 
         def iterator():
             try:
-                # xb
-                # rb
                 with open(fpath, 'rb') as f:
-                    while True:
-                        contents = f.read(READSIZE)
-                        if not contents:
-                            break
-                        yield contents
-            except FileExistsError:
-                logging.error("{} already exists! Cannot overwrite".format(
-                    fpath))
+                    for chunk in iter(lambda: f.read(READSIZE), b''):
+                        yield chunk
             except PermissionError:
                 logging.error("Insufficient permissions to read {}".format(
                     fpath))
             except FileNotFoundError:
                 logging.error("{} does not exist!".format(fpath))
         return iterator()
-
-    def connection_lost(self, exc):
-        self.h_timeout.cancel()
-        logging.info("Connection to {0}:{1} terminated".format(*self.addr))
-        # might remove
-        logging.info(exc)
 
 
 class TftpServer(object):
@@ -181,6 +181,9 @@ class TftpServer(object):
 
 if __name__ == '__main__':
     # argparse
+    logging.basicConfig(
+        format='%(asctime)s [%(levelname)s] %(message)s',
+        level=logging.INFO)
     port = 8069
     i_addr = '127.0.0.1'
 
