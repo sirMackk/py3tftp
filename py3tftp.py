@@ -13,6 +13,7 @@ READSIZE = 512
 ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
+# test various exceptional situations
 # send err packets when required
 # asyncio file io?
 
@@ -79,13 +80,17 @@ class BaseTftpServer(object):
         logging.error("Error receiving packet from {0}: {1}".format(
             self.remote_addr, exc))
 
-    def transmit(self, pkt):
+    def reply_to_client(self, pkt):
         self.transport.sendto(pkt)
         self.retransmit = asyncio.get_event_loop().call_later(
-            ACK_TIMEOUT, self.transmit, pkt)
+            ACK_TIMEOUT, self.reply_to_client, pkt)
+
+    def retransmit_reset(self):
+        if self.retransmit:
+            self.retransmit.cancel()
 
     def send_opening_packet(self, packet):
-        self.transmit(packet)
+        self.reply_to_client(packet)
         self.h_timeout = asyncio.get_event_loop().call_later(
             CONN_TIMEOUT, self.conn_timeout)
 
@@ -130,14 +135,12 @@ class WRQServer(BaseTftpServer):
         self.send_opening_packet(pkt)
 
     def datagram_received(self, data, addr):
-        self.conn_timeout_reset()
-
         if self.is_data(data) and self.is_correct_data(data):
-            if self.retransmit:
-                self.retransmit.cancel()
+            self.conn_timeout_reset()
+            self.retransmit_reset()
 
             self.counter += 1
-            self.transmit(self.current_ack())
+            self.reply_to_client(self.current_ack())
             try:
                 self.file_writer.send(data[4:])
             except StopIteration:
@@ -187,15 +190,12 @@ class RRQServer(BaseTftpServer):
     def datagram_received(self, data, addr):
         self.conn_timeout_reset()
 
-        logging.debug("Receiving dgram, length: {}".format(len(data)))
         if self.is_ack(data) and self.correct_ack(data):
-            if self.retransmit:
-                self.retransmit.cancel()
+            self.retransmit_reset()
             try:
                 self.counter += 1
-                logging.debug("sending!")
                 packet = next(self.file_reader)
-                self.transmit(packet)
+                self.reply_to_client(packet)
             except StopIteration:
                 logging.info("Sending file to {} completed".format(
                     self.remote_addr))

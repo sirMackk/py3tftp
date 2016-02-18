@@ -90,6 +90,28 @@ class TestRRQ(unittest.TestCase):
         received = bytes(self.output)
         self.assertEqual((max_msgs - 1) * 512, len(received))
 
+    @unittest.skip('')
+    def test_file_not_found(self):
+        pass
+
+    @unittest.skip('')
+    def test_access_violation(self):
+        pass
+
+    @unittest.skip('')
+    def test_illegal_tftp_operation(self):
+        pass
+
+    @unittest.skip('')
+    def test_unknown_transfer_id(self):
+        # send packet where source is different from remote_addr
+        # must reply with err #4
+        pass
+
+    @unittest.skip('')
+    def test_undefined_error(self):
+        pass
+
 
 class TestWRQ(unittest.TestCase):
     @classmethod
@@ -129,6 +151,52 @@ class TestWRQ(unittest.TestCase):
 
         self.assertEqual(len(license_test), self.license_buf.tell())
         self.assertEqual(self.license_md5, license_test_md5)
+
+    def test_lost_data_packet(self):
+        last_pkt = None
+        counter = 0
+        outbound_data = self.license
+        while True:
+            ack, server = self.s.recvfrom(512)
+            if counter > 0 and counter % 10 == 0 and pkt != last_pkt:
+                pkt = last_pkt
+            else:
+                try:
+                    pkt = next(outbound_data)
+                except StopIteration:
+                    break
+                counter += 1
+
+            self.s.sendto(DAT +
+                          (counter).to_bytes(2,
+                                             byteorder='little') + pkt,
+                          server)
+            last_pkt = pkt
+
+        sleep(1)
+        with open('LICENSE_TEST', 'rb') as f:
+            license_test = f.read()
+            license_test_md5 = hashlib.md5(license_test).hexdigest()
+
+        self.assertEqual(len(license_test), self.license_buf.tell())
+        self.assertEqual(self.license_md5, license_test_md5)
+
+    @unittest.skip('')
+    def test_drop_client_connection(self):
+        pass
+
+    @unittest.skip('')
+    def test_access_violation_error(self):
+        pass
+
+    @unittest.skip('')
+    def test_disk_full(self):
+        pass
+
+    @unittest.skip('')
+    def test_file_already_exists(self):
+        pass
+
 
 if __name__ == '__main__':
     unittest.main()
