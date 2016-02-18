@@ -13,37 +13,15 @@ READSIZE = 512
 ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
-# test various exceptional situations
 # send err packets when required
 # asyncio file io?
 
 
-class SafeOpen(object):
-    def __init__(self, fname, mode):
-        self.fname = fname
-        self.mode = mode
-
-    def __enter__(self):
-        try:
-            self.file = open(self.fname, self.mode)
-        except FileExistsError:
-            logging.error("{} already exists! Cannot overwrite".format(
-                self.fname))
-        except PermissionError:
-            logging.error("Insufficient permissions to operate on {}".format(
-                self.fname))
-        except FileNotFoundError:
-            logging.error("{} does not exist!".format(self.fname))
-        return self.file
-
-    def __exit__(self, *exc):
-        self.file.close()
-
-
-class BaseTftpServer(object):
+class BaseTftpServer(asyncio.DatagramProtocol):
     def __init__(self, request, remote_addr):
         self.remote_addr = remote_addr
         self.filename, _ = self.validate_req(*self.parse_req(request))
+        self.retransmit = None
 
     def validate_req(self, fname, mode):
         return (fname.decode(encoding='ascii'), mode,)
@@ -69,16 +47,18 @@ class BaseTftpServer(object):
 
     def connection_lost(self, exc):
         self.h_timeout.cancel()
-        logging.info("Connection to {0}:{1} terminated".format(
-            *self.remote_addr))
         if exc:
-            logging.error(exc)
+            logging.error("Error on connection lost: {}".format(exc))
+        else:
+            logging.info("Connection to {0}:{1} terminated".format(
+                *self.remote_addr))
 
     def error_received(self, exc):
         self.h_timeout.cancel()
         self.retransmit.cancel()
-        logging.error("Error receiving packet from {0}: {1}".format(
-            self.remote_addr, exc))
+        self.transport.close()
+        logging.error("Error receiving packet from {0}: {1}. Transfer of '{2}' aborted".format(
+            self.remote_addr, exc, self.filename))
 
     def reply_to_client(self, pkt):
         self.transport.sendto(pkt)
@@ -95,8 +75,9 @@ class BaseTftpServer(object):
             CONN_TIMEOUT, self.conn_timeout)
 
     def conn_timeout(self):
-        logging.error("Connection to {} timed out".format(self.remote_addr))
-        self.retransmit.cancel()
+        logging.error("Connection to {0} timed out, '{1}' not transfered".format(
+            self.remote_addr, self.filename))
+        self.retransmit_reset()
         self.transport.close()
 
     def conn_timeout_reset(self):
@@ -104,18 +85,55 @@ class BaseTftpServer(object):
         self.h_timeout = asyncio.get_event_loop().call_later(
             CONN_TIMEOUT, self.conn_timeout)
 
+    def err_file_exists(self):
+        return ERR + b'\x06\x00File already exists\x00'
+
+    def err_access_violation(self):
+        return ERR + b'\x02\x00Access violation\x00'
+
+    def err_file_not_found(self):
+        return ERR + b'\x01\x00File not found\x00'
+
+    def handle_initialization(self):
+        try:
+            pkt = self.initialize_transfer()
+        except FileExistsError:
+            logging.error("'{}' already exists! Cannot overwrite".format(
+                self.filename))
+            pkt = self.err_file_exists()
+        except PermissionError:
+            logging.error("Insufficient permissions to operate on '{}'".format(
+                self.filename))
+            pkt = self.err_access_violation()
+        except FileNotFoundError:
+            logging.error("File '{}' does not exist!".format(self.filename))
+            pkt = self.err_file_not_found()
+
+        self.send_opening_packet(pkt)
+
+        if pkt[:2] == ERR:
+            logging.error(
+                "Closing connection to {0} due to error. '{1}' Not transmitted.".format(
+                    self.remote_addr, self.filename))
+            self.retransmit_reset()
+            # self.transport.close()
+
     def connection_made(self, transport):
-        raise NotImplementedError
+        self.transport = transport
+        self.handle_initialization()
 
     def datagram_received(self, data, addr):
+        raise NotImplementedError
+
+    def initialize_transfer(self):
         raise NotImplementedError
 
 
 class WRQServer(BaseTftpServer):
     def __init__(self, wrq, addr):
-        logging.info("Starting WRQServer, recving file from {}".format(
-            addr))
         super().__init__(wrq, addr)
+        logging.info("Starting WRQServer, recving file '{0}' from {1}".format(
+            self.filename, self.remote_addr))
 
     def is_data(self, data):
         return data[:2] == DAT
@@ -127,12 +145,13 @@ class WRQServer(BaseTftpServer):
     def current_ack(self):
         return ACK + self.pack_short(self.counter)
 
-    def connection_made(self, transport):
-        self.transport = transport
+    def initialize_transfer(self):
         self.counter = 0
         self.file_writer = self.get_file_writer(self.filename)
-        pkt = self.current_ack()
-        self.send_opening_packet(pkt)
+        return self.current_ack()
+
+    def connection_made(self, transport):
+        super().connection_made(transport)
 
     def datagram_received(self, data, addr):
         if self.is_data(data) and self.is_correct_data(data):
@@ -141,12 +160,13 @@ class WRQServer(BaseTftpServer):
 
             self.counter += 1
             self.reply_to_client(self.current_ack())
+
             try:
                 self.file_writer.send(data[4:])
             except StopIteration:
-                logging.info("Receiving file from {} completed".format(
-                    self.remote_addr))
-                self.retransmit.cancel()
+                logging.info("Receiving file '{0}' from {1} completed".format(
+                    self.filename, self.remote_addr))
+                self.retransmit_reset()
                 self.transport.close()
         else:
             logging.debug("data: {0}; is_data: {1}; counter: {2}".format(
@@ -156,7 +176,7 @@ class WRQServer(BaseTftpServer):
         fpath = self.sanitize_fname(fname)
 
         def iterator():
-            with SafeOpen(fpath, 'xb') as f:
+            with open(fpath, 'xb') as f:
                 while True:
                     data = yield
                     f.write(data)
@@ -169,9 +189,9 @@ class WRQServer(BaseTftpServer):
 
 class RRQServer(BaseTftpServer):
     def __init__(self, rrq, addr):
-        logging.info("Starting RRQServer, sending file to {}".format(
-            addr))
         super().__init__(rrq, addr)
+        logging.info("Starting RRQServer, sending file '{0}' to {1}".format(
+            self.filename, self.remote_addr))
 
     def is_ack(self, data):
         return data[:2] == ACK
@@ -180,12 +200,10 @@ class RRQServer(BaseTftpServer):
         ack_count = self.unpack_short(data[2:4])
         return self.counter == ack_count
 
-    def connection_made(self, transport):
-        self.transport = transport
+    def initialize_transfer(self):
         self.counter = 1
         self.file_reader = self.get_file_reader(self.filename)
-        pkt = next(self.file_reader)
-        self.send_opening_packet(pkt)
+        return next(self.file_reader)
 
     def datagram_received(self, data, addr):
         self.conn_timeout_reset()
@@ -197,8 +215,8 @@ class RRQServer(BaseTftpServer):
                 packet = next(self.file_reader)
                 self.reply_to_client(packet)
             except StopIteration:
-                logging.info("Sending file to {} completed".format(
-                    self.remote_addr))
+                logging.info("Sending file '{0}' to {1} completed".format(
+                    self.filename, self.remote_addr))
                 self.transport.close()
         else:
             logging.debug("ack: {0}; is_ack: {1}; counter: {2}".format(
@@ -208,13 +226,13 @@ class RRQServer(BaseTftpServer):
         fpath = self.sanitize_fname(fname)
 
         def iterator():
-            with SafeOpen(fpath, 'rb') as f:
+            with open(fpath, 'rb') as f:
                 for chunk in iter(lambda: f.read(READSIZE), b''):
                     yield chunk
         return iterator()
 
 
-class TftpServer(object):
+class TftpServer(asyncio.DatagramProtocol):
     def __init__(self, loop):
         self.loop = loop
 

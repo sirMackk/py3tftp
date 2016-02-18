@@ -8,8 +8,15 @@ from os.path import exists
 from time import sleep
 
 
-ACK = b'\x04\x00'
+RRQ = b'\x01\x00'
+WRQ = b'\x02\x00'
 DAT = b'\x03\x00'
+ACK = b'\x04\x00'
+ERR = b'\x05\x00'
+
+NOFOUND = b'\x01\x00'
+ACCVIOL = b'\x02\x00'
+EEXISTS = b'\x06\x00'
 
 
 class TestRRQ(unittest.TestCase):
@@ -18,15 +25,15 @@ class TestRRQ(unittest.TestCase):
         with open('LICENSE', 'rb') as f:
             cls.license = f.read()
         cls.license_md5 = hashlib.md5(cls.license).hexdigest()
-        cls.serverAddr = ('127.0.0.1', 8069,)
-        cls.rrq = b'\x01\x00LICENSE\x00binary\x00'
+        cls.server_addr = ('127.0.0.1', 8069,)
+        cls.rrq = RRQ + b'LICENSE\x00binary\x00'
 
     def setUp(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.counter = 1
         self.output = []
         self.data = None
-        self.s.sendto(self.rrq, self.serverAddr)
+        self.s.sendto(self.rrq, self.server_addr)
 
     def tearDown(self):
         self.s.close()
@@ -72,7 +79,6 @@ class TestRRQ(unittest.TestCase):
         self.assertTrue(self.license_md5 == received_md5)
 
     def test_total_timeout(self):
-        # raises errno 111 in server - handle better
         max_msgs = 15
         while True:
             self.data, server = self.s.recvfrom(512)
@@ -86,31 +92,8 @@ class TestRRQ(unittest.TestCase):
 
             if len(self.data) < 512:
                 break
-
         received = bytes(self.output)
         self.assertEqual((max_msgs - 1) * 512, len(received))
-
-    @unittest.skip('')
-    def test_file_not_found(self):
-        pass
-
-    @unittest.skip('')
-    def test_access_violation(self):
-        pass
-
-    @unittest.skip('')
-    def test_illegal_tftp_operation(self):
-        pass
-
-    @unittest.skip('')
-    def test_unknown_transfer_id(self):
-        # send packet where source is different from remote_addr
-        # must reply with err #4
-        pass
-
-    @unittest.skip('')
-    def test_undefined_error(self):
-        pass
 
 
 class TestWRQ(unittest.TestCase):
@@ -122,15 +105,15 @@ class TestWRQ(unittest.TestCase):
             cls.license_buf.write(license)
             cls.license_buf.seek(0)
             cls.license_md5 = hashlib.md5(license).hexdigest()
-        cls.serverAddr = ('127.0.0.1', 8069,)
-        cls.wrq = b'\x02\x00LICENSE_TEST\x00binary\x00'
+        cls.server_addr = ('127.0.0.1', 8069,)
+        cls.wrq = WRQ + b'LICENSE_TEST\x00binary\x00'
 
     def setUp(self):
         if exists('LICENSE_TEST'):
             rm('LICENSE_TEST')
         self.license = iter(lambda: self.license_buf.read(512), b'')
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.s.sendto(self.wrq, self.serverAddr)
+        self.s.sendto(self.wrq, self.server_addr)
 
     def tearDown(self):
         self.license_buf.seek(0)
@@ -181,9 +164,22 @@ class TestWRQ(unittest.TestCase):
         self.assertEqual(len(license_test), self.license_buf.tell())
         self.assertEqual(self.license_md5, license_test_md5)
 
-    @unittest.skip('')
     def test_drop_client_connection(self):
-        pass
+        PKTS_BEFORE_DISCONNECT = 15
+        for i, chunk in enumerate(self.license):
+            ack, server = self.s.recvfrom(512)
+            if i >= PKTS_BEFORE_DISCONNECT:
+                break
+            self.s.sendto(DAT + (i + 1).to_bytes(2,
+                                                 byteorder='little') + chunk,
+                          server)
+
+        # wait for timeout to close file
+        sleep(3.1)
+        with open('LICENSE_TEST', 'rb') as f:
+            license_test = f.read()
+
+        self.assertEqual(len(license_test), self.license_buf.tell() - 512)
 
     @unittest.skip('')
     def test_access_violation_error(self):
@@ -195,6 +191,44 @@ class TestWRQ(unittest.TestCase):
 
     @unittest.skip('')
     def test_file_already_exists(self):
+        pass
+
+
+class TestRRQErrors(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.server_addr = ('127.0.0.1', 8069,)
+
+    def setUp(self):
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def tearDown(self):
+        self.s.close()
+
+    def test_file_not_found(self):
+        no_such_file = RRQ + b'NOSUCHFILE\x00binary\x00'
+        self.s.sendto(no_such_file, self.server_addr)
+        data, server = self.s.recvfrom(512)
+        self.assertEqual(ERR + NOFOUND, data[:4])
+
+    # def test_access_violation(self):
+        # no_perms = RRQ + b'NOPERMS\x00binary\x00'
+        # self.s.sendto(no_perms, self.server_addr)
+        # data, server = self.s.recvfrom(512)
+        # self.assertEqual(ERR + ACCVIOL, data[:4])
+
+    @unittest.skip('')
+    def test_illegal_tftp_operation(self):
+        pass
+
+    @unittest.skip('')
+    def test_unknown_transfer_id(self):
+        # send packet where source is different from remote_addr
+        # must reply with err #4
+        pass
+
+    @unittest.skip('')
+    def test_undefined_error(self):
         pass
 
 
