@@ -112,12 +112,12 @@ class BaseTftpServer(asyncio.DatagramProtocol):
         self.send_opening_packet(pkt)
 
         if pkt[:2] == ERR:
-            logging.error(
+            logging.info(
                 "Closing connection to {0} due to error. '{1}' Not transmitted.".format(
                     self.remote_addr, self.filename))
             self.retransmit_reset()
-            logging.warning('wat: {} - {}'.format(self.transport.get_extra_info('peername'), self.transport.get_extra_info('sockname')))
-            # self.transport.close()
+            self.h_timeout.cancel()
+            asyncio.get_event_loop().call_soon(self.transport.close)
 
     def connection_made(self, transport):
         self.transport = transport
@@ -153,7 +153,6 @@ class WRQServer(BaseTftpServer):
 
     def connection_made(self, transport):
         super().connection_made(transport)
-        logging.warning('{} - {}'.format(transport.get_extra_info('peername'), transport.get_extra_info('sockname')))
 
     def datagram_received(self, data, addr):
         if self.is_data(data) and self.is_correct_data(data):

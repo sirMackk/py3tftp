@@ -169,7 +169,6 @@ class TestWRQ(unittest.TestCase):
         PKTS_BEFORE_DISCONNECT = 15
         for i, chunk in enumerate(self.license):
             ack, server = self.s.recvfrom(1024)
-            print(ack)
             if i >= PKTS_BEFORE_DISCONNECT:
                 break
             self.s.sendto(DAT + (i + 1).to_bytes(2,
