@@ -10,10 +10,10 @@ DAT = b'\x00\x03'
 ACK = b'\x00\x04'
 ERR = b'\x00\x05'
 READSIZE = 512
-ACK_TIMEOUT = 1.0
+ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
-# send err packets when required
+# add wrong source port error
 # asyncio file io?
 
 

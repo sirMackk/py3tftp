@@ -182,18 +182,6 @@ class TestWRQ(unittest.TestCase):
 
         self.assertEqual(len(license_test), self.license_buf.tell() - 512)
 
-    @unittest.skip('')
-    def test_access_violation_error(self):
-        pass
-
-    @unittest.skip('')
-    def test_disk_full(self):
-        pass
-
-    @unittest.skip('')
-    def test_file_already_exists(self):
-        pass
-
 
 class TestRRQErrors(unittest.TestCase):
     @classmethod
@@ -212,11 +200,18 @@ class TestRRQErrors(unittest.TestCase):
         data, server = self.s.recvfrom(512)
         self.assertEqual(ERR + NOFOUND, data[:4])
 
-    # def test_access_violation(self):
-        # no_perms = RRQ + b'NOPERMS\x00binary\x00'
-        # self.s.sendto(no_perms, self.server_addr)
-        # data, server = self.s.recvfrom(512)
-        # self.assertEqual(ERR + ACCVIOL, data[:4])
+    def test_file_already_exists(self):
+        dup_file = WRQ + b'LICENSE\x00octet\x00'
+        self.s.sendto(dup_file, self.server_addr)
+        data, server = self.s.recvfrom(512)
+        self.assertEqual(ERR + EEXISTS, data[:4])
+
+    @unittest.skip('Gotta think of a way to test this')
+    def test_access_violation(self):
+        no_perms = RRQ + b'NOPERMS\x00binary\x00'
+        self.s.sendto(no_perms, self.server_addr)
+        data, server = self.s.recvfrom(512)
+        self.assertEqual(ERR + ACCVIOL, data[:4])
 
     @unittest.skip('')
     def test_illegal_tftp_operation(self):
@@ -230,6 +225,10 @@ class TestRRQErrors(unittest.TestCase):
 
     @unittest.skip('')
     def test_undefined_error(self):
+        pass
+
+    @unittest.skip('')
+    def test_disk_full(self):
         pass
 
 
