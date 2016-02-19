@@ -8,15 +8,15 @@ from os.path import exists
 from time import sleep
 
 
-RRQ = b'\x01\x00'
-WRQ = b'\x02\x00'
-DAT = b'\x03\x00'
-ACK = b'\x04\x00'
-ERR = b'\x05\x00'
+RRQ = b'\x00\x01'
+WRQ = b'\x00\x02'
+DAT = b'\x00\x03'
+ACK = b'\x00\x04'
+ERR = b'\x00\x05'
 
-NOFOUND = b'\x01\x00'
-ACCVIOL = b'\x02\x00'
-EEXISTS = b'\x06\x00'
+NOFOUND = b'\x00\x01'
+ACCVIOL = b'\x00\x02'
+EEXISTS = b'\x00\x06'
 
 
 class TestRRQ(unittest.TestCase):
@@ -40,14 +40,14 @@ class TestRRQ(unittest.TestCase):
 
     def test_perfect_scenario(self):
         while True:
-            self.data, server = self.s.recvfrom(512)
-            self.output += self.data
+            self.data, server = self.s.recvfrom(1024)
+            self.output += self.data[4:]
 
-            msg = ACK + struct.pack('=H', self.counter)
+            msg = ACK + self.counter.to_bytes(2, byteorder='big')
             self.s.sendto(msg, server)
             self.counter += 1
 
-            if len(self.data) < 512:
+            if len(self.data[4:]) < 512:
                 break
 
         received = bytes(self.output)
@@ -58,19 +58,19 @@ class TestRRQ(unittest.TestCase):
     def test_no_acks(self):
         no_ack = True
         while True:
-            self.data, server = self.s.recvfrom(512)
+            self.data, server = self.s.recvfrom(1024)
             if self.counter % 5 == 0 and no_ack:
                 # dont ack, discard data
                 no_ack = False
             else:
                 no_ack = True
-                self.output += self.data
+                self.output += self.data[4:]
 
-                msg = ACK + struct.pack('=H', self.counter)
+                msg = ACK + self.counter.to_bytes(2, byteorder='big')
                 self.s.sendto(msg, server)
                 self.counter += 1
 
-                if len(self.data) < 512:
+                if len(self.data[4:]) < 512:
                     break
 
         received = bytes(self.output)
@@ -81,16 +81,17 @@ class TestRRQ(unittest.TestCase):
     def test_total_timeout(self):
         max_msgs = 15
         while True:
-            self.data, server = self.s.recvfrom(512)
+            self.data, server = self.s.recvfrom(1024)
             if self.counter >= max_msgs:
                 break
 
-            self.output += self.data
-            msg = ACK + struct.pack('=H', self.counter)
+            self.output += self.data[4:]
+            msg = ACK + self.counter.to_bytes(2, byteorder='big')
+
             self.s.sendto(msg, server)
             self.counter += 1
 
-            if len(self.data) < 512:
+            if len(self.data[4:]) < 512:
                 break
         received = bytes(self.output)
         self.assertEqual((max_msgs - 1) * 512, len(received))
@@ -121,10 +122,10 @@ class TestWRQ(unittest.TestCase):
 
     def test_perfect_transfer(self):
         for i, chunk in enumerate(self.license):
-            ack, server = self.s.recvfrom(512)
-            self.assertEqual(ack, ACK + struct.pack('=H', i))
+            ack, server = self.s.recvfrom(1024)
+            self.assertEqual(ack, ACK + i.to_bytes(2, byteorder='big'))
             self.s.sendto(DAT + (i + 1).to_bytes(2,
-                                                 byteorder='little') + chunk,
+                                                 byteorder='big') + chunk,
                           server)
 
         sleep(1)
@@ -140,7 +141,7 @@ class TestWRQ(unittest.TestCase):
         counter = 0
         outbound_data = self.license
         while True:
-            ack, server = self.s.recvfrom(512)
+            ack, server = self.s.recvfrom(1024)
             if counter > 0 and counter % 10 == 0 and pkt != last_pkt:
                 pkt = last_pkt
             else:
@@ -152,7 +153,7 @@ class TestWRQ(unittest.TestCase):
 
             self.s.sendto(DAT +
                           (counter).to_bytes(2,
-                                             byteorder='little') + pkt,
+                                             byteorder='big') + pkt,
                           server)
             last_pkt = pkt
 
@@ -167,11 +168,12 @@ class TestWRQ(unittest.TestCase):
     def test_drop_client_connection(self):
         PKTS_BEFORE_DISCONNECT = 15
         for i, chunk in enumerate(self.license):
-            ack, server = self.s.recvfrom(512)
+            ack, server = self.s.recvfrom(1024)
+            print(ack)
             if i >= PKTS_BEFORE_DISCONNECT:
                 break
             self.s.sendto(DAT + (i + 1).to_bytes(2,
-                                                 byteorder='little') + chunk,
+                                                 byteorder='big') + chunk,
                           server)
 
         # wait for timeout to close file

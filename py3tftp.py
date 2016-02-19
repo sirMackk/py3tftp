@@ -4,13 +4,13 @@ import asyncio
 import os.path as opath
 
 
-RRQ = b'\x01\x00'
-WRQ = b'\x02\x00'
-DAT = b'\x03\x00'
-ACK = b'\x04\x00'
-ERR = b'\x05\x00'
+RRQ = b'\x00\x01'
+WRQ = b'\x00\x02'
+DAT = b'\x00\x03'
+ACK = b'\x00\x04'
+ERR = b'\x00\x05'
 READSIZE = 512
-ACK_TIMEOUT = 0.5
+ACK_TIMEOUT = 1.0
 CONN_TIMEOUT = 3.0
 
 # send err packets when required
@@ -33,10 +33,10 @@ class BaseTftpServer(asyncio.DatagramProtocol):
         return rq[0], rq[1]
 
     def pack_short(self, number):
-        return number.to_bytes(2, byteorder='little')
+        return number.to_bytes(2, byteorder='big')
 
     def unpack_short(self, data):
-        return int.from_bytes(data, byteorder='little')
+        return int.from_bytes(data, byteorder='big')
 
     def sanitize_fname(self, fname):
         root_dir = os.getcwd()
@@ -86,13 +86,13 @@ class BaseTftpServer(asyncio.DatagramProtocol):
             CONN_TIMEOUT, self.conn_timeout)
 
     def err_file_exists(self):
-        return ERR + b'\x06\x00File already exists\x00'
+        return ERR + b'\x00\x06File already exists\x00'
 
     def err_access_violation(self):
-        return ERR + b'\x02\x00Access violation\x00'
+        return ERR + b'\x00\x02Access violation\x00'
 
     def err_file_not_found(self):
-        return ERR + b'\x01\x00File not found\x00'
+        return ERR + b'\x00\x01File not found\x00'
 
     def handle_initialization(self):
         try:
@@ -116,6 +116,7 @@ class BaseTftpServer(asyncio.DatagramProtocol):
                 "Closing connection to {0} due to error. '{1}' Not transmitted.".format(
                     self.remote_addr, self.filename))
             self.retransmit_reset()
+            logging.warning('wat: {} - {}'.format(self.transport.get_extra_info('peername'), self.transport.get_extra_info('sockname')))
             # self.transport.close()
 
     def connection_made(self, transport):
@@ -152,6 +153,7 @@ class WRQServer(BaseTftpServer):
 
     def connection_made(self, transport):
         super().connection_made(transport)
+        logging.warning('{} - {}'.format(transport.get_extra_info('peername'), transport.get_extra_info('sockname')))
 
     def datagram_received(self, data, addr):
         if self.is_data(data) and self.is_correct_data(data):
@@ -203,7 +205,7 @@ class RRQServer(BaseTftpServer):
     def initialize_transfer(self):
         self.counter = 1
         self.file_reader = self.get_file_reader(self.filename)
-        return next(self.file_reader)
+        return DAT + self.pack_short(self.counter) + next(self.file_reader)
 
     def datagram_received(self, data, addr):
         self.conn_timeout_reset()
@@ -212,7 +214,7 @@ class RRQServer(BaseTftpServer):
             self.retransmit_reset()
             try:
                 self.counter += 1
-                packet = next(self.file_reader)
+                packet = DAT + self.pack_short(self.counter) + next(self.file_reader)
                 self.reply_to_client(packet)
             except StopIteration:
                 logging.info("Sending file '{0}' to {1} completed".format(
