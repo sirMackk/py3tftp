@@ -16,6 +16,7 @@ ERR = b'\x00\x05'
 
 NOFOUND = b'\x00\x01'
 ACCVIOL = b'\x00\x02'
+UNKNTID = b'\x00\x05'
 EEXISTS = b'\x00\x06'
 
 
@@ -217,11 +218,40 @@ class TestRRQErrors(unittest.TestCase):
     def test_illegal_tftp_operation(self):
         pass
 
-    @unittest.skip('')
-    def test_unknown_transfer_id(self):
-        # send packet where source is different from remote_addr
-        # must reply with err #4
-        pass
+    def test_unknown_transfer_id_rrq(self):
+        legit_transfer = RRQ + b'LICENSE\x00octet\x00'
+        self.s.sendto(legit_transfer, self.server_addr)
+        data, server = self.s.recvfrom(1024)
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.sendto(ACK + (1).to_bytes(2, byteorder='big'), server)
+            err, server = s.recvfrom(32)
+        finally:
+            s.close()
+
+        self.assertEqual(ERR + UNKNTID, err[:4])
+
+    def test_unknown_transfer_id_wrq(self):
+        if exists('LICENSE_TEST'):
+            rm('LICENSE_TEST')
+        legit_transfer = WRQ + b'LICENSE_TEST\x00octet\x00'
+        self.s.sendto(legit_transfer, self.server_addr)
+        ack, server = self.s.recvfrom(16)
+        print(server)
+        print(self.s.getsockname())
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.sendto(DAT + (1).to_bytes(2,
+                                        byteorder='big') + b'\x41\x41\x41',
+                     server)
+            print('sockname: {}'.format(s.getsockname()))
+            err, server = s.recvfrom(32)
+        finally:
+            s.close()
+
+        self.assertEqual(ERR + UNKNTID, err[:4])
 
     @unittest.skip('')
     def test_undefined_error(self):
