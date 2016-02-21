@@ -26,7 +26,7 @@ class TestRRQ(unittest.TestCase):
         with open('LICENSE', 'rb') as f:
             cls.license = f.read()
         cls.license_md5 = hashlib.md5(cls.license).hexdigest()
-        cls.server_addr = ('127.0.0.1', 8069,)
+        cls.server_addr = ('127.0.0.1', 9069,)
         cls.rrq = RRQ + b'LICENSE\x00binary\x00'
 
     def setUp(self):
@@ -107,7 +107,7 @@ class TestWRQ(unittest.TestCase):
             cls.license_buf.write(license)
             cls.license_buf.seek(0)
             cls.license_md5 = hashlib.md5(license).hexdigest()
-        cls.server_addr = ('127.0.0.1', 8069,)
+        cls.server_addr = ('127.0.0.1', 9069,)
         cls.wrq = WRQ + b'LICENSE_TEST\x00binary\x00'
 
     def setUp(self):
@@ -187,7 +187,7 @@ class TestWRQ(unittest.TestCase):
 class TestRRQErrors(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server_addr = ('127.0.0.1', 8069,)
+        cls.server_addr = ('127.0.0.1', 9069,)
 
     def setUp(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -206,17 +206,6 @@ class TestRRQErrors(unittest.TestCase):
         self.s.sendto(dup_file, self.server_addr)
         data, server = self.s.recvfrom(512)
         self.assertEqual(ERR + EEXISTS, data[:4])
-
-    @unittest.skip('Gotta think of a way to test this')
-    def test_access_violation(self):
-        no_perms = RRQ + b'NOPERMS\x00binary\x00'
-        self.s.sendto(no_perms, self.server_addr)
-        data, server = self.s.recvfrom(512)
-        self.assertEqual(ERR + ACCVIOL, data[:4])
-
-    @unittest.skip('')
-    def test_illegal_tftp_operation(self):
-        pass
 
     def test_unknown_transfer_id_rrq(self):
         legit_transfer = RRQ + b'LICENSE\x00octet\x00'
@@ -238,20 +227,28 @@ class TestRRQErrors(unittest.TestCase):
         legit_transfer = WRQ + b'LICENSE_TEST\x00octet\x00'
         self.s.sendto(legit_transfer, self.server_addr)
         ack, server = self.s.recvfrom(16)
-        print(server)
-        print(self.s.getsockname())
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             s.sendto(DAT + (1).to_bytes(2,
                                         byteorder='big') + b'\x41\x41\x41',
                      server)
-            print('sockname: {}'.format(s.getsockname()))
             err, server = s.recvfrom(32)
         finally:
             s.close()
 
         self.assertEqual(ERR + UNKNTID, err[:4])
+
+    @unittest.skip('Gotta think of a way to test this')
+    def test_access_violation(self):
+        no_perms = RRQ + b'NOPERMS\x00binary\x00'
+        self.s.sendto(no_perms, self.server_addr)
+        data, server = self.s.recvfrom(512)
+        self.assertEqual(ERR + ACCVIOL, data[:4])
+
+    @unittest.skip('')
+    def test_illegal_tftp_operation(self):
+        pass
 
     @unittest.skip('')
     def test_undefined_error(self):

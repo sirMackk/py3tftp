@@ -3,6 +3,8 @@ import logging
 import asyncio
 import os.path as opath
 
+from py3tftp.cli_parser import parse_cli_arguments
+
 
 RRQ = b'\x00\x01'
 WRQ = b'\x00\x02'
@@ -10,10 +12,9 @@ DAT = b'\x00\x03'
 ACK = b'\x00\x04'
 ERR = b'\x00\x05'
 READSIZE = 512
-ACK_TIMEOUT = 1.5
+ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
-# argparse
 # make into module and upload to pypr -> http://python-packaging.readthedocs.org/en/latest/minimal.html
 # asyncio file io?
 
@@ -291,18 +292,14 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
         logging.info('TFTP server - connection lost')
 
 if __name__ == '__main__':
-    logging.basicConfig(
-        format='%(asctime)s [%(levelname)s] %(message)s',
-        level=logging.INFO)
-    port = 8069
-    i_addr = '127.0.0.1'
+    args = parse_cli_arguments()
 
-    logging.info('Starting TFTP server on {i_addr}:{port}'.format(
-        i_addr=i_addr, port=port))
+    logging.info('Starting TFTP server on {addr}:{port}'.format(
+        addr=args.host, port=args.port))
     loop = asyncio.get_event_loop()
     listen = loop.create_datagram_endpoint(
         lambda: TFTPServerProtocol(loop),
-        local_addr=(i_addr, port,))
+        local_addr=(args.host, args.port,))
 
     transport, protocol = loop.run_until_complete(listen)
 
