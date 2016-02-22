@@ -2,30 +2,44 @@ import argparse
 import logging
 from sys import exit
 
+from py3tftp.py3tftp import __version__
+
+EPILOG = """
+Released under the MIT license.
+Copyright 2016 Matt O. <matt@mattscodecave.com>
+"""
+
+logging_config = {
+    'format': '%(asctime)s [%(levelname)s] %(message)s',
+    'level': logging.INFO,
+    'filename': None
+}
+
 
 def print_version():
-    pass
-    print("Version: {}".format('0.0.1'))
-
-
-def print_help():
-    print("Help")
+    print("py3tftp version: {}".format(__version__))
 
 
 def parse_cli_arguments():
-    logging_config = {
-        'format': '%(asctime)s [%(levelname)s] %(message)s',
-        'level': logging.INFO,
-        'filename': None
-    }
-
-    parser = argparse.ArgumentParser(add_help=False)
-    parser.add_argument('--host', default='0.0.0.0')
-    parser.add_argument('-p', '--port', default=9069)
-    parser.add_argument('-v', '--verbose', action='store_true')
-    parser.add_argument('-l', '--log')
+    parser = argparse.ArgumentParser(epilog=EPILOG)
+    parser.add_argument('--host',
+                        default='0.0.0.0',
+                        help=('IP of the interface the server will listen on. '
+                              'Default: 0.0.0.0'))
+    parser.add_argument(
+        '-p',
+        '--port',
+        default=9069,
+        help=(
+            'Port the server will listen on. '
+            'Default: 9069. TFTP standard-compliant port: 69 - '
+            'requires superuser privileges.'))
+    parser.add_argument('-v',
+                        '--verbose',
+                        action='store_true',
+                        help='Enable debug-level logging.')
+    parser.add_argument('-l', '--file-log', help='Append output to log file.')
     parser.add_argument('--version', action='store_true')
-    parser.add_argument('-h', '--help', action='store_true')
 
     args = parser.parse_args()
 
@@ -33,15 +47,10 @@ def parse_cli_arguments():
         logging_config['level'] = logging.DEBUG
 
     if args.log:
-        # also make output to stdout + toggle
         logging_config['filename'] = args.log
 
     if args.version:
         print_version()
-        exit()
-
-    if args.help:
-        print_help()
         exit()
 
     logging.basicConfig(**logging_config)

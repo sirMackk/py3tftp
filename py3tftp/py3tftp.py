@@ -3,7 +3,7 @@ import logging
 import asyncio
 import os.path as opath
 
-from py3tftp.cli_parser import parse_cli_arguments
+__version__ = '0.0.1'
 
 
 RRQ = b'\x00\x01'
@@ -292,6 +292,7 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
         logging.info('TFTP server - connection lost')
 
 if __name__ == '__main__':
+    from py3tftp.cli_parser import parse_cli_arguments
     args = parse_cli_arguments()
 
     logging.info('Starting TFTP server on {addr}:{port}'.format(
