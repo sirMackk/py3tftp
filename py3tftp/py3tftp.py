@@ -12,10 +12,8 @@ DAT = b'\x00\x03'
 ACK = b'\x00\x04'
 ERR = b'\x00\x05'
 READSIZE = 512
-ACK_TIMEOUT = 0.5
-CONN_TIMEOUT = 3.0
-
-# asyncio file io?
+ACK_TIMEOUT = None
+CONN_TIMEOUT = None
 
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol):
@@ -292,8 +290,13 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
 
 
 def main():
+    global ACK_TIMEOUT
+    global CONN_TIMEOUT
     from py3tftp.cli_parser import parse_cli_arguments
     args = parse_cli_arguments()
+
+    ACK_TIMEOUT = args.ack_timeout
+    CONN_TIMEOUT = args.conn_timeout
 
     logging.info('Starting TFTP server on {addr}:{port}'.format(
         addr=args.host, port=args.port))

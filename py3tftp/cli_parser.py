@@ -30,15 +30,28 @@ def parse_cli_arguments():
         '-p',
         '--port',
         default=9069,
+        type=int,
         help=(
             'Port the server will listen on. '
             'Default: 9069. TFTP standard-compliant port: 69 - '
             'requires superuser privileges.'))
+    parser.add_argument(
+        '--ack-timeout',
+        default=0.5,
+        type=float,
+        help='Timeout for each ACK of the lock-step. Default: 0.5.')
+    parser.add_argument(
+        '--conn-timeout',
+        default=3.0,
+        type=float,
+        help=(
+            'Timeout before the server gives up on a transfer and closes '
+            'the connection. Default: 3.'))
+    parser.add_argument('-l', '--file-log', help='Append output to log file.')
     parser.add_argument('-v',
                         '--verbose',
                         action='store_true',
                         help='Enable debug-level logging.')
-    parser.add_argument('-l', '--file-log', help='Append output to log file.')
     parser.add_argument('--version', action='store_true')
 
     args = parser.parse_args()
