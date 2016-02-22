@@ -46,7 +46,7 @@ def parse_cli_arguments():
     if args.verbose:
         logging_config['level'] = logging.DEBUG
 
-    if args.log:
+    if args.file_log:
         logging_config['filename'] = args.log
 
     if args.version:

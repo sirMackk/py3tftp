@@ -15,7 +15,6 @@ READSIZE = 512
 ACK_TIMEOUT = 0.5
 CONN_TIMEOUT = 3.0
 
-# make into module and upload to pypr -> http://python-packaging.readthedocs.org/en/latest/minimal.html
 # asyncio file io?
 
 
@@ -291,12 +290,14 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
     def connection_lost(self, exc):
         logging.info('TFTP server - connection lost')
 
-if __name__ == '__main__':
+
+def main():
     from py3tftp.cli_parser import parse_cli_arguments
     args = parse_cli_arguments()
 
     logging.info('Starting TFTP server on {addr}:{port}'.format(
         addr=args.host, port=args.port))
+
     loop = asyncio.get_event_loop()
     listen = loop.create_datagram_endpoint(
         lambda: TFTPServerProtocol(loop),
@@ -311,3 +312,6 @@ if __name__ == '__main__':
 
     transport.close()
     loop.close()
+
+if __name__ == '__main__':
+    main()

@@ -80,7 +80,7 @@ class TestRRQ(unittest.TestCase):
         self.assertTrue(self.license_md5 == received_md5)
 
     def test_total_timeout(self):
-        max_msgs = 15
+        max_msgs = 2
         while True:
             self.data, server = self.s.recvfrom(1024)
             if self.counter >= max_msgs:
@@ -167,7 +167,7 @@ class TestWRQ(unittest.TestCase):
         self.assertEqual(self.license_md5, license_test_md5)
 
     def test_drop_client_connection(self):
-        PKTS_BEFORE_DISCONNECT = 15
+        PKTS_BEFORE_DISCONNECT = 1
         for i, chunk in enumerate(self.license):
             ack, server = self.s.recvfrom(1024)
             if i >= PKTS_BEFORE_DISCONNECT:
@@ -184,7 +184,7 @@ class TestWRQ(unittest.TestCase):
         self.assertEqual(len(license_test), self.license_buf.tell() - 512)
 
 
-class TestRRQErrors(unittest.TestCase):
+class TestTFTPErrors(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.server_addr = ('127.0.0.1', 9069,)
