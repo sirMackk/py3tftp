@@ -15,13 +15,11 @@ READSIZE = 512
 ACK_TIMEOUT = None
 CONN_TIMEOUT = None
 
+# README
+# implements rfc 2347, 2348, 2349
 
-class BaseTFTPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, request, remote_addr):
-        self.remote_addr = remote_addr
-        self.filename, _ = self.validate_req(*self.parse_req(request))
-        self.retransmit = None
 
+class TFTPParserMixin(object):
     def validate_req(self, fname, mode):
         return (fname.decode(encoding='ascii'), mode,)
 
@@ -31,18 +29,6 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         logging.debug("Parsed request: {}".format(rq))
         return rq[0], rq[1]
 
-    def pack_short(self, number):
-        return number.to_bytes(2, byteorder='big')
-
-    def unpack_short(self, data):
-        return int.from_bytes(data, byteorder='big')
-
-    def pack_data(self, data, block_no):
-        return b''.join((DAT, self.pack_short(block_no), data,))
-
-    def unpack_data(self, data):
-        return data[4:]
-
     def sanitize_fname(self, fname):
         root_dir = os.getcwd()
         return opath.join(
@@ -50,69 +36,22 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
             opath.normpath(
                 '/' + fname).lstrip('/'))
 
-    def connection_lost(self, exc):
-        self.h_timeout.cancel()
-        if exc:
-            logging.error("Error on connection lost: {}".format(exc))
-        else:
-            logging.info("Connection to {0}:{1} terminated".format(
-                *self.remote_addr))
 
-    def error_received(self, exc):
-        self.h_timeout.cancel()
-        self.retransmit_reset()
-        self.transport.close()
-        logging.error(
-            "Error receiving packet from {0}: {1}. Transfer of '{2}' aborted".format(
-                self.remote_addr, exc, self.filename))
+class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
+    def __init__(self, request, remote_addr):
+        self.remote_addr = remote_addr
+        self.filename, _ = self.validate_req(*self.parse_req(request))
+        self.retransmit = None
 
-    def reply_to_client(self, pkt):
-        self.transport.sendto(pkt, self.remote_addr)
-        self.retransmit = asyncio.get_event_loop().call_later(
-            ACK_TIMEOUT, self.reply_to_client, pkt)
+    def datagram_received(self, data, addr):
+        raise NotImplementedError
 
-    def retransmit_reset(self):
-        if self.retransmit:
-            self.retransmit.cancel()
+    def initialize_transfer(self):
+        raise NotImplementedError
 
-    def send_opening_packet(self, packet):
-        self.reply_to_client(packet)
-        self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
-
-    def conn_timeout(self):
-        logging.error(
-            "Connection to {0} timed out, '{1}' not transfered".format(
-                self.remote_addr, self.filename))
-        self.retransmit_reset()
-        self.transport.close()
-
-    def conn_timeout_reset(self):
-        self.h_timeout.cancel()
-        self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
-
-    def err_file_exists(self):
-        return ERR + b'\x00\x06File already exists\x00'
-
-    def err_access_violation(self):
-        return ERR + b'\x00\x02Access violation\x00'
-
-    def err_file_not_found(self):
-        return ERR + b'\x00\x01File not found\x00'
-
-    def err_unknown_tid(self):
-        return ERR + b'\x00\x05Unknown transfer id\x00'
-
-    def is_correct_tid(self, addr):
-        if self.remote_addr[1] == addr[1]:
-            return True
-        else:
-            logging.warning(
-                'Unknown transfer id: expected {0}, got {1} instead.'.format(
-                    self.remote_addr, addr))
-            self.transport.sendto(self.err_unknown_tid(), addr)
-            return False
+    def connection_made(self, transport):
+        self.transport = transport
+        self.handle_initialization()
 
     def handle_initialization(self):
         try:
@@ -131,23 +70,103 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
         self.send_opening_packet(pkt)
 
-        if pkt[:2] == ERR:
-            logging.info(
-                "Closing connection to {0} due to error. '{1}' Not transmitted.".format(
-                    self.remote_addr, self.filename))
-            self.retransmit_reset()
+        if self.is_err(pkt):
+            self.handle_err_pkt()
+
+    def connection_lost(self, exc):
+        self.conn_reset()
+        if exc:
+            logging.error(
+                "Error on connection lost: {0}.\nTraceback: {1}".format(
+                    exc, exc.__traceback__))
+        else:
+            logging.info("Connection to {0}:{1} terminated".format(
+                *self.remote_addr))
+
+    def error_received(self, exc):
+        self.conn_reset()
+        self.retransmit_reset()
+        self.transport.close()
+        logging.error((
+            "Error receiving packet from {0}: {1}. "
+            "Transfer of '{2}' aborted.\nTraceback: {3}").format(
+                self.remote_addr, exc, self.filename, exc.__traceback__))
+
+    def send_opening_packet(self, packet):
+        self.reply_to_client(packet)
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
+
+    def reply_to_client(self, pkt):
+        self.transport.sendto(pkt, self.remote_addr)
+        self.retransmit = asyncio.get_event_loop().call_later(
+            ACK_TIMEOUT, self.reply_to_client, pkt)
+
+    def handle_err_pkt(self):
+        logging.info((
+            "Closing connection to {0} due to error. "
+            "'{1}' Not transmitted.").format(
+                self.remote_addr, self.filename))
+        self.retransmit_reset()
+        self.conn_reset()
+        asyncio.get_event_loop().call_soon(self.transport.close)
+
+    def retransmit_reset(self):
+        if self.retransmit:
+            self.retransmit.cancel()
+
+    def conn_reset(self):
+        if self.h_timeout:
             self.h_timeout.cancel()
-            asyncio.get_event_loop().call_soon(self.transport.close)
 
-    def connection_made(self, transport):
-        self.transport = transport
-        self.handle_initialization()
+    def conn_timeout(self):
+        logging.error(
+            "Connection to {0} timed out, '{1}' not transfered".format(
+                self.remote_addr, self.filename))
+        self.retransmit_reset()
+        self.transport.close()
 
-    def datagram_received(self, data, addr):
-        raise NotImplementedError
+    def conn_timeout_reset(self):
+        self.conn_reset()
+        self.h_timeout = asyncio.get_event_loop().call_later(
+            CONN_TIMEOUT, self.conn_timeout)
 
-    def initialize_transfer(self):
-        raise NotImplementedError
+    def is_err(self, pkt):
+        return pkt[:2] == ERR
+
+    def is_correct_tid(self, addr):
+        if self.remote_addr[1] == addr[1]:
+            return True
+        else:
+            logging.warning(
+                'Unknown transfer id: expected {0}, got {1} instead.'.format(
+                    self.remote_addr, addr))
+            self.transport.sendto(self.err_unknown_tid(), addr)
+            return False
+
+    def pack_short(self, number):
+        return number.to_bytes(2, byteorder='big')
+
+    def unpack_short(self, data):
+        return int.from_bytes(data, byteorder='big')
+
+    def pack_data(self, data, block_no):
+        return b''.join((DAT, self.pack_short(block_no), data,))
+
+    def unpack_data(self, data):
+        return data[4:]
+
+    def err_file_exists(self):
+        return ERR + b'\x00\x06File already exists\x00'
+
+    def err_access_violation(self):
+        return ERR + b'\x00\x02Access violation\x00'
+
+    def err_file_not_found(self):
+        return ERR + b'\x00\x01File not found\x00'
+
+    def err_unknown_tid(self):
+        return ERR + b'\x00\x05Unknown transfer id\x00'
 
 
 class WRQProtocol(BaseTFTPProtocol):
@@ -228,12 +247,11 @@ class RRQProtocol(BaseTFTPProtocol):
         return self.pack_data(next(self.file_reader), self.counter)
 
     def datagram_received(self, data, addr):
-        self.conn_timeout_reset()
-
         if (self.is_correct_tid(addr) and
                 self.is_ack(data) and
                 self.is_correct_ack(data)):
             self.retransmit_reset()
+            self.conn_timeout_reset()
             try:
                 self.counter += 1
                 packet = self.pack_data(next(self.file_reader), self.counter)
