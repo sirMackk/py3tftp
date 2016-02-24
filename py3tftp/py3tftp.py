@@ -275,7 +275,8 @@ class RRQProtocol(BaseTFTPProtocol):
 
 
 class TFTPServerProtocol(asyncio.DatagramProtocol):
-    def __init__(self, loop):
+    def __init__(self, host_if, loop):
+        self.host_if = host_if
         self.loop = loop
 
     def connection_made(self, transport):
@@ -299,7 +300,7 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
 
         connect = self.loop.create_datagram_endpoint(
             lambda: server(chunk, addr),
-            local_addr=('127.0.0.1', 0,))
+            local_addr=(self.host_if, 0,))
 
         self.loop.create_task(connect)
 
@@ -321,7 +322,7 @@ def main():
 
     loop = asyncio.get_event_loop()
     listen = loop.create_datagram_endpoint(
-        lambda: TFTPServerProtocol(loop),
+        lambda: TFTPServerProtocol(args.host, loop),
         local_addr=(args.host, args.port,))
 
     transport, protocol = loop.run_until_complete(listen)
