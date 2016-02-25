@@ -3,7 +3,7 @@ import logging
 import asyncio
 import os.path as opath
 
-__version__ = '0.0.1'
+__version__ = '0.0.2'
 
 
 RRQ = b'\x00\x01'
@@ -11,23 +11,30 @@ WRQ = b'\x00\x02'
 DAT = b'\x00\x03'
 ACK = b'\x00\x04'
 ERR = b'\x00\x05'
-READSIZE = 512
-ACK_TIMEOUT = None
-CONN_TIMEOUT = None
-
-# README
-# implements rfc 2347, 2348, 2349
+OCK = b'\x00\x06'
 
 
 class TFTPParserMixin(object):
-    def validate_req(self, fname, mode):
-        return (fname.decode(encoding='ascii'), mode,)
+    supported_opts = {
+         b'blksize': int,
+         b'timeout': float,
+    }
+
+    def validate_req(self, fname, mode, opts):
+        options = {}
+        for option, value in opts.items():
+            logging.debug(option)
+            if option in self.supported_opts.keys():
+                logging.debug(option)
+                options[option] = self.supported_opts[option](value)
+
+        return (fname.decode(encoding='ascii'), mode, options)
 
     def parse_req(self, req):
         logging.debug("Reqest: {}".format(req))
-        rq = req.split(b'\x00')
-        logging.debug("Parsed request: {}".format(rq))
-        return rq[0], rq[1]
+        fname, mode, *opts = filter(None, req.split(b'\x00'))
+        options = dict(zip(opts[::2], opts[1::2]))
+        return fname, mode, options
 
     def sanitize_fname(self, fname):
         root_dir = os.getcwd()
@@ -38,9 +45,15 @@ class TFTPParserMixin(object):
 
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
-    def __init__(self, request, remote_addr):
+    default_opts = {b'ack_timeout': 0.5, b'conn_timeout': 5.0, b'blksize': 512}
+
+    def __init__(self, request, remote_addr, timeout_opts):
         self.remote_addr = remote_addr
-        self.filename, _ = self.validate_req(*self.parse_req(request))
+        self.filename, _, self.r_opts = self.validate_req(
+            *self.parse_req(request))
+        logging.debug(self.r_opts)
+        self.opts = {**self.default_opts, **timeout_opts, **self.r_opts}
+        logging.debug(self.opts)
         self.retransmit = None
 
     def datagram_received(self, data, addr):
@@ -49,13 +62,21 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
     def initialize_transfer(self):
         raise NotImplementedError
 
+    def next_datagram(self):
+        raise NotImplementedError
+
     def connection_made(self, transport):
         self.transport = transport
         self.handle_initialization()
 
     def handle_initialization(self):
         try:
-            pkt = self.initialize_transfer()
+            self.initialize_transfer()
+            if self.r_opts:
+                self.counter = 0
+                pkt = self.oack_packet()
+            else:
+                pkt = self.next_datagram()
         except FileExistsError:
             logging.error("'{}' already exists! Cannot overwrite".format(
                 self.filename))
@@ -68,6 +89,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
             logging.error("File '{}' does not exist!".format(self.filename))
             pkt = self.err_file_not_found()
 
+        logging.debug('opening pkt: {}'.format(pkt))
         self.send_opening_packet(pkt)
 
         if self.is_err(pkt):
@@ -95,12 +117,12 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
     def send_opening_packet(self, packet):
         self.reply_to_client(packet)
         self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
+            self.opts['conn_timeout'], self.conn_timeout)
 
     def reply_to_client(self, pkt):
         self.transport.sendto(pkt, self.remote_addr)
         self.retransmit = asyncio.get_event_loop().call_later(
-            ACK_TIMEOUT, self.reply_to_client, pkt)
+            self.opts['ack_timeout'], self.reply_to_client, pkt)
 
     def handle_err_pkt(self):
         logging.info((
@@ -129,7 +151,13 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
     def conn_timeout_reset(self):
         self.conn_reset()
         self.h_timeout = asyncio.get_event_loop().call_later(
-            CONN_TIMEOUT, self.conn_timeout)
+            self.opts['conn_timeout'], self.conn_timeout)
+
+    def oack_packet(self):
+        return (OCK +
+                b''.join(b'\x00'.join([k, bytes(str(int(v)), encoding='ascii')])
+                         for k, v in self.r_opts.items()) +
+                b'\x00')
 
     def is_err(self, pkt):
         return pkt[:2] == ERR
@@ -170,8 +198,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
 
 
 class WRQProtocol(BaseTFTPProtocol):
-    def __init__(self, wrq, addr):
-        super().__init__(wrq, addr)
+    def __init__(self, wrq, addr, *args):
+        super().__init__(wrq, addr, *args)
         logging.info(
             "Initiating WRQProtocol, recving file '{0}' from {1}".format(
                 self.filename, self.remote_addr))
@@ -183,13 +211,12 @@ class WRQProtocol(BaseTFTPProtocol):
         data_no = self.unpack_short(data[2:4])
         return self.counter + 1 == data_no
 
-    def current_ack(self):
+    def next_datagram(self):
         return ACK + self.pack_short(self.counter)
 
     def initialize_transfer(self):
         self.counter = 0
         self.file_writer = self.get_file_writer(self.filename)
-        return self.current_ack()
 
     def datagram_received(self, data, addr):
         if (self.is_correct_tid(addr) and
@@ -199,7 +226,7 @@ class WRQProtocol(BaseTFTPProtocol):
             self.retransmit_reset()
 
             self.counter += 1
-            self.reply_to_client(self.current_ack())
+            self.reply_to_client(self.next_datagram())
 
             try:
                 self.file_writer.send(self.unpack_data(data))
@@ -220,7 +247,7 @@ class WRQProtocol(BaseTFTPProtocol):
                 while True:
                     data = yield
                     f.write(data)
-                    if len(data) < READSIZE:
+                    if len(data) < self.opts[b'blksize']:
                         raise StopIteration
         writer = iterator()
         writer.send(None)
@@ -228,8 +255,8 @@ class WRQProtocol(BaseTFTPProtocol):
 
 
 class RRQProtocol(BaseTFTPProtocol):
-    def __init__(self, rrq, addr):
-        super().__init__(rrq, addr)
+    def __init__(self, rrq, addr, *args):
+        super().__init__(rrq, addr, *args)
         logging.info(
             "Initiating RRQProtocol, sending file '{0}' to {1}".format(
                 self.filename, self.remote_addr))
@@ -241,10 +268,12 @@ class RRQProtocol(BaseTFTPProtocol):
         ack_count = self.unpack_short(data[2:4])
         return self.counter == ack_count
 
+    def next_datagram(self):
+        return self.pack_data(next(self.file_reader), self.counter)
+
     def initialize_transfer(self):
         self.counter = 1
         self.file_reader = self.get_file_reader(self.filename)
-        return self.pack_data(next(self.file_reader), self.counter)
 
     def datagram_received(self, data, addr):
         if (self.is_correct_tid(addr) and
@@ -254,7 +283,7 @@ class RRQProtocol(BaseTFTPProtocol):
             self.conn_timeout_reset()
             try:
                 self.counter += 1
-                packet = self.pack_data(next(self.file_reader), self.counter)
+                packet = self.next_datagram()
                 self.reply_to_client(packet)
             except StopIteration:
                 logging.info("Sending file '{0}' to {1} completed".format(
@@ -269,15 +298,16 @@ class RRQProtocol(BaseTFTPProtocol):
 
         def iterator():
             with open(fpath, 'rb') as f:
-                for chunk in iter(lambda: f.read(READSIZE), b''):
+                for chunk in iter(lambda: f.read(self.opts[b'blksize']), b''):
                     yield chunk
         return iterator()
 
 
 class TFTPServerProtocol(asyncio.DatagramProtocol):
-    def __init__(self, host_if, loop):
+    def __init__(self, host_if, loop, timeout_opts):
         self.host_if = host_if
         self.loop = loop
+        self.timeout_opts = timeout_opts
 
     def connection_made(self, transport):
         logging.info("Listening...")
@@ -299,7 +329,7 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
             return
 
         connect = self.loop.create_datagram_endpoint(
-            lambda: server(chunk, addr),
+            lambda: server(chunk, addr, self.timeout_opts),
             local_addr=(self.host_if, 0,))
 
         self.loop.create_task(connect)
@@ -309,20 +339,16 @@ class TFTPServerProtocol(asyncio.DatagramProtocol):
 
 
 def main():
-    global ACK_TIMEOUT
-    global CONN_TIMEOUT
     from py3tftp.cli_parser import parse_cli_arguments
     args = parse_cli_arguments()
-
-    ACK_TIMEOUT = args.ack_timeout
-    CONN_TIMEOUT = args.conn_timeout
 
     logging.info('Starting TFTP server on {addr}:{port}'.format(
         addr=args.host, port=args.port))
 
+    timeouts = {k: v for k, v in vars(args).items() if 'timeout' in k}
     loop = asyncio.get_event_loop()
     listen = loop.create_datagram_endpoint(
-        lambda: TFTPServerProtocol(args.host, loop),
+        lambda: TFTPServerProtocol(args.host, loop, timeouts),
         local_addr=(args.host, args.port,))
 
     transport, protocol = loop.run_until_complete(listen)
