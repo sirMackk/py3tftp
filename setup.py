@@ -2,15 +2,23 @@ from setuptools import setup
 from py3tftp.py3tftp import __version__
 
 
+def readme():
+    with open('README.md') as f:
+        return f.read()
+
+
 setup(
     name='py3tftp',
     version=__version__,
     description='Python 3 asynchronous TFTP server.',
+    long_description=readme(),
     url='http://github.com/sirMackk/py3tftp',
     author='Matt Obarzanek',
     author_email='matt@mattscodecave.com',
     license='MIT',
+    keywords='async asynchronous tftp',
     packages=['py3tftp'],
+    include_package_data=True,
     entry_points={
         'console_scripts': [
             'py3tftp = py3tftp.py3tftp:main'

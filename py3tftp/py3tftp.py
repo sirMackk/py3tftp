@@ -107,7 +107,6 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
 
     def error_received(self, exc):
         self.conn_reset()
-        self.retransmit_reset()
         self.transport.close()
         logging.error((
             "Error receiving packet from {0}: {1}. "
@@ -129,7 +128,6 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
             "Closing connection to {0} due to error. "
             "'{1}' Not transmitted.").format(
                 self.remote_addr, self.filename))
-        self.retransmit_reset()
         self.conn_reset()
         asyncio.get_event_loop().call_soon(self.transport.close)
 
@@ -138,6 +136,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPParserMixin):
             self.retransmit.cancel()
 
     def conn_reset(self):
+        self.retransmit_reset()
         if self.h_timeout:
             self.h_timeout.cancel()
 
@@ -223,7 +222,6 @@ class WRQProtocol(BaseTFTPProtocol):
                 self.is_data(data) and
                 self.is_correct_data(data)):
             self.conn_timeout_reset()
-            self.retransmit_reset()
 
             self.counter += 1
             self.reply_to_client(self.next_datagram())
@@ -279,7 +277,6 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and
                 self.is_ack(data) and
                 self.is_correct_ack(data)):
-            self.retransmit_reset()
             self.conn_timeout_reset()
             try:
                 self.counter += 1
