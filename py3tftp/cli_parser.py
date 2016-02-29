@@ -41,7 +41,7 @@ def parse_cli_arguments():
         type=float,
         help='Timeout for each ACK of the lock-step. Default: 0.5.')
     parser.add_argument(
-        '--conn-timeout',
+        '--timeout',
         default=3.0,
         type=float,
         help=(
