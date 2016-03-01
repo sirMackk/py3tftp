@@ -49,6 +49,32 @@ I wrote some simple acceptance tests in `tests/acceptance/*_test.py`. The code i
 python tests/acceptance/*_.py
 ```
 
+#### Extending the Protocols
+
+There are two protocols: one for handling read requests (RRQProtocol) and one for handling write requests (WRQProtocol). Each has methods that manage the state of a single read or write connection and take care of accepting correct messages, sending replies, reading or writing the next chunk of a file, etc.
+
+Both of these protocol inherit from BaseTFTPProtocol, which takes care of lower level operations such as parsing an initial request, performing OS checks on files (permissions, existance, etc.), as well as tackle resending unacknowledged datagrams and timing out connections. This class mixes in the TFTPOptParserMixin, which parses requests, and validates options and the filename. TFTP options are validated against a dict of supported options in the BaseTFTPProtocol class.
+
+##### Example Scenario
+
+If you'd want to allow py3tftp to handle non-spec protocol options, you'd extend either the RRQProtocol or WRQProtocol class and create a custom `supported_opts` property with the extra option, followed by adding a custom `default_opts` property that contains a default for the new options.
+
+```
+class RickAstelyProtocol(RRQProtocol):
+    supported_opts = {
+        **RRQProtocol.supported_opts, 
+        b'nvr_gvup': lambda i: bytes(i, encoding='ascii')}
+    default_opts = {
+        **RRQProtocol.default_opts,
+        b'nvr_gvup': b'let you down'
+    }
+```
+
+The above ensures that the new option is accepted and made available during a connection.
+
+In order to incorporate the new option, you would look at overloading methods that handle data and connections: `datagram_received`, `connection_made`, `connection_lost`, `initialize_transfer` / `handle_initialization`. In our scenario, we want to check if the requested file contains the _let you down_ string before serving it
+
+
 
 #### Roadplan
 
