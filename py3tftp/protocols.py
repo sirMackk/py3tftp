@@ -183,16 +183,22 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         self.h_timeout = asyncio.get_event_loop().call_later(
             self.opts['timeout'], self.conn_timeout)
 
-    # doesnt work for non-int opts
-    # int -> str -> bytes is stupid
     def oack_packet(self):
         """
         Builds a OACK response that contains accepted options.
         """
-        return (OCK +
-                b''.join(b'\x00'.join([k, bytes(str(int(v)), encoding='ascii')])
-                         for k, v in self.r_opts.items()) +
-                b'\x00')
+
+        options = b'\x00'.join(
+            (k, v if isinstance(v, bytes) else self.number_to_bytes(v))
+            for k, v in self.r_opts.items())
+
+        return OCK + b''.join(options + b'\x00')
+
+    def number_to_bytes(self, val):
+        """
+        Changes a number to an ascii byte string.
+        """
+        return bytes(str(int(v)), encoding='ascii')
 
     def is_err(self, pkt):
         return pkt[:2] == ERR

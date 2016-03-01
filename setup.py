@@ -21,7 +21,7 @@ setup(
     include_package_data=True,
     entry_points={
         'console_scripts': [
-            'py3tftp = py3tftp.py3tftp:main'
+            'py3tftp = py3tftp.__main__:main'
         ]
     },
     classifiers=[
