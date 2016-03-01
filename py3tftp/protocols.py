@@ -34,6 +34,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         self.opts = {**self.default_opts, **extra_opts, **self.r_opts}
         logging.debug(self.opts)
         self.retransmit = None
+        self.file_iterator = None
 
     def datagram_received(self, data, addr):
         """
@@ -94,10 +95,12 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 
     def connection_lost(self, exc):
         """
-        Handles cleanup after connection has been lost. Logs an error
+        Cleans up socket and fd after connection has been lost. Logs an error
         if connection interrupted.
         """
         self.conn_reset()
+        if self.file_iterator:
+            self.file_iterator.close()
         if exc:
             logging.error(
                 'Error on connection lost: {0}.\nTraceback: {1}'.format(
@@ -280,7 +283,7 @@ class WRQProtocol(BaseTFTPProtocol):
 
     def initialize_transfer(self):
         self.counter = 0
-        self.file_writer = self.get_file_writer(self.filename)
+        self.file_iterator = self.get_file_writer(self.filename)
 
     def datagram_received(self, data, addr):
         """
@@ -296,7 +299,7 @@ class WRQProtocol(BaseTFTPProtocol):
             self.reply_to_client(self.next_datagram())
 
             try:
-                self.file_writer.send(self.unpack_data(data))
+                self.file_iterator.send(self.unpack_data(data))
             except StopIteration:
                 logging.info('Receiving file "{0}" from {1} completed'.format(
                     self.filename, self.remote_addr))
@@ -342,11 +345,11 @@ class RRQProtocol(BaseTFTPProtocol):
         return self.counter == ack_count
 
     def next_datagram(self):
-        return self.pack_data(next(self.file_reader), self.counter)
+        return self.pack_data(next(self.file_iterator), self.counter)
 
     def initialize_transfer(self):
         self.counter = 1
-        self.file_reader = self.get_file_reader(self.filename)
+        self.file_iterator = self.get_file_reader(self.filename)
 
     def datagram_received(self, data, addr):
         """
