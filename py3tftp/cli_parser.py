@@ -2,7 +2,7 @@ import argparse
 import logging
 from sys import exit
 
-from py3tftp.py3tftp import __version__
+from py3tftp import __version__
 
 EPILOG = """
 Released under the MIT license.

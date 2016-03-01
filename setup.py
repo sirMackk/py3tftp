@@ -1,5 +1,5 @@
 from setuptools import setup
-from py3tftp.py3tftp import __version__
+from py3tftp import __version__
 
 
 def readme():
