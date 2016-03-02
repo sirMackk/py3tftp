@@ -1,0 +1,11 @@
+RRQ = b'\x00\x01'
+WRQ = b'\x00\x02'
+DAT = b'\x00\x03'
+ACK = b'\x00\x04'
+ERR = b'\x00\x05'
+OCK = b'\x00\x06'
+
+NOFOUND = b'\x00\x01'
+ACCVIOL = b'\x00\x02'
+UNKNTID = b'\x00\x05'
+EEXISTS = b'\x00\x06'

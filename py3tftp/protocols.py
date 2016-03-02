@@ -192,16 +192,17 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         """
 
         options = b'\x00'.join(
-            (k, v if isinstance(v, bytes) else self.number_to_bytes(v))
+            b'\x00'.join(
+                (k, v if isinstance(v, bytes) else self.number_to_bytes(v)))
             for k, v in self.r_opts.items())
 
-        return OCK + b''.join(options + b'\x00')
+        return OCK + options + b'\x00'
 
     def number_to_bytes(self, val):
         """
         Changes a number to an ascii byte string.
         """
-        return bytes(str(int(v)), encoding='ascii')
+        return bytes(str(int(val)), encoding='ascii')
 
     def is_err(self, pkt):
         return pkt[:2] == ERR

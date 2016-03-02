@@ -1,23 +1,12 @@
 import unittest
 import socket
-import struct
 import hashlib
 from io import BytesIO
 from os import remove as rm
 from os.path import exists
 from time import sleep
 
-
-RRQ = b'\x00\x01'
-WRQ = b'\x00\x02'
-DAT = b'\x00\x03'
-ACK = b'\x00\x04'
-ERR = b'\x00\x05'
-
-NOFOUND = b'\x00\x01'
-ACCVIOL = b'\x00\x02'
-UNKNTID = b'\x00\x05'
-EEXISTS = b'\x00\x06'
+import test_helpers as h
 
 
 class TestRRQ(unittest.TestCase):
@@ -27,7 +16,7 @@ class TestRRQ(unittest.TestCase):
             cls.license = f.read()
         cls.license_md5 = hashlib.md5(cls.license).hexdigest()
         cls.server_addr = ('127.0.0.1', 9069,)
-        cls.rrq = RRQ + b'LICENSE\x00binary\x00'
+        cls.rrq = h.RRQ + b'LICENSE\x00binary\x00'
 
     def setUp(self):
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -44,7 +33,7 @@ class TestRRQ(unittest.TestCase):
             self.data, server = self.s.recvfrom(1024)
             self.output += self.data[4:]
 
-            msg = ACK + self.counter.to_bytes(2, byteorder='big')
+            msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
             self.s.sendto(msg, server)
             self.counter += 1
 
@@ -67,7 +56,7 @@ class TestRRQ(unittest.TestCase):
                 no_ack = True
                 self.output += self.data[4:]
 
-                msg = ACK + self.counter.to_bytes(2, byteorder='big')
+                msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
                 self.s.sendto(msg, server)
                 self.counter += 1
 
@@ -87,7 +76,7 @@ class TestRRQ(unittest.TestCase):
                 break
 
             self.output += self.data[4:]
-            msg = ACK + self.counter.to_bytes(2, byteorder='big')
+            msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
 
             self.s.sendto(msg, server)
             self.counter += 1
@@ -108,7 +97,7 @@ class TestWRQ(unittest.TestCase):
             cls.license_buf.seek(0)
             cls.license_md5 = hashlib.md5(license).hexdigest()
         cls.server_addr = ('127.0.0.1', 9069,)
-        cls.wrq = WRQ + b'LICENSE_TEST\x00binary\x00'
+        cls.wrq = h.WRQ + b'LICENSE_TEST\x00binary\x00'
 
     def setUp(self):
         if exists('LICENSE_TEST'):
@@ -124,8 +113,8 @@ class TestWRQ(unittest.TestCase):
     def test_perfect_transfer(self):
         for i, chunk in enumerate(self.license):
             ack, server = self.s.recvfrom(1024)
-            self.assertEqual(ack, ACK + i.to_bytes(2, byteorder='big'))
-            self.s.sendto(DAT + (i + 1).to_bytes(2,
+            self.assertEqual(ack, h.ACK + i.to_bytes(2, byteorder='big'))
+            self.s.sendto(h.DAT + (i + 1).to_bytes(2,
                                                  byteorder='big') + chunk,
                           server)
 
@@ -152,7 +141,7 @@ class TestWRQ(unittest.TestCase):
                     break
                 counter += 1
 
-            self.s.sendto(DAT +
+            self.s.sendto(h.DAT +
                           (counter).to_bytes(2,
                                              byteorder='big') + pkt,
                           server)
@@ -172,7 +161,7 @@ class TestWRQ(unittest.TestCase):
             ack, server = self.s.recvfrom(1024)
             if i >= PKTS_BEFORE_DISCONNECT:
                 break
-            self.s.sendto(DAT + (i + 1).to_bytes(2,
+            self.s.sendto(h.DAT + (i + 1).to_bytes(2,
                                                  byteorder='big') + chunk,
                           server)
 
@@ -196,55 +185,55 @@ class TestTFTPErrors(unittest.TestCase):
         self.s.close()
 
     def test_file_not_found(self):
-        no_such_file = RRQ + b'NOSUCHFILE\x00binary\x00'
+        no_such_file = h.RRQ + b'NOSUCHFILE\x00binary\x00'
         self.s.sendto(no_such_file, self.server_addr)
         data, server = self.s.recvfrom(512)
-        self.assertEqual(ERR + NOFOUND, data[:4])
+        self.assertEqual(h.ERR + h.NOFOUND, data[:4])
 
     def test_file_already_exists(self):
-        dup_file = WRQ + b'LICENSE\x00octet\x00'
+        dup_file = h.WRQ + b'LICENSE\x00octet\x00'
         self.s.sendto(dup_file, self.server_addr)
         data, server = self.s.recvfrom(512)
-        self.assertEqual(ERR + EEXISTS, data[:4])
+        self.assertEqual(h.ERR + h.EEXISTS, data[:4])
 
     def test_unknown_transfer_id_rrq(self):
-        legit_transfer = RRQ + b'LICENSE\x00octet\x00'
+        legit_transfer = h.RRQ + b'LICENSE\x00octet\x00'
         self.s.sendto(legit_transfer, self.server_addr)
         data, server = self.s.recvfrom(1024)
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.sendto(ACK + (1).to_bytes(2, byteorder='big'), server)
+            s.sendto(h.ACK + (1).to_bytes(2, byteorder='big'), server)
             err, server = s.recvfrom(32)
         finally:
             s.close()
 
-        self.assertEqual(ERR + UNKNTID, err[:4])
+        self.assertEqual(h.ERR + h.UNKNTID, err[:4])
 
     def test_unknown_transfer_id_wrq(self):
         if exists('LICENSE_TEST'):
             rm('LICENSE_TEST')
-        legit_transfer = WRQ + b'LICENSE_TEST\x00octet\x00'
+        legit_transfer = h.WRQ + b'LICENSE_TEST\x00octet\x00'
         self.s.sendto(legit_transfer, self.server_addr)
         ack, server = self.s.recvfrom(16)
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.sendto(DAT + (1).to_bytes(2,
+            s.sendto(h.DAT + (1).to_bytes(2,
                                         byteorder='big') + b'\x41\x41\x41',
                      server)
             err, server = s.recvfrom(32)
         finally:
             s.close()
 
-        self.assertEqual(ERR + UNKNTID, err[:4])
+        self.assertEqual(h.ERR + h.UNKNTID, err[:4])
 
     @unittest.skip('Gotta think of a way to test this')
     def test_access_violation(self):
-        no_perms = RRQ + b'NOPERMS\x00binary\x00'
+        no_perms = h.RRQ + b'NOPERMS\x00binary\x00'
         self.s.sendto(no_perms, self.server_addr)
         data, server = self.s.recvfrom(512)
-        self.assertEqual(ERR + ACCVIOL, data[:4])
+        self.assertEqual(h.ERR + h.ACCVIOL, data[:4])
 
     @unittest.skip('')
     def test_illegal_tftp_operation(self):
