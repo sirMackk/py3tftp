@@ -2,7 +2,7 @@ import logging
 import asyncio
 
 from .exceptions import ProtocolException
-from .opt_parsers import TFTPOptParserMixin
+from .opt_parsers import TFTPOptParserMixin, BlksizeParser, TimeoutParser
 
 RRQ = b'\x00\x01'
 WRQ = b'\x00\x02'
@@ -14,8 +14,8 @@ OCK = b'\x00\x06'
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
     supported_opts = {
-         b'blksize': int,
-         b'timeout': float,
+         b'blksize': BlksizeParser,
+         b'timeout': TimeoutParser,
     }
 
     default_opts = {
@@ -25,14 +25,11 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
     }
 
     def __init__(self, request, remote_addr, extra_opts=None):
-        if not extra_opts:
-            extra_opts = {}
         self.remote_addr = remote_addr
-        self.filename, _, self.r_opts = self.validate_req(
-            *self.parse_req(request))
-        logging.debug(self.r_opts)
-        self.opts = {**self.default_opts, **extra_opts, **self.r_opts}
-        logging.debug(self.opts)
+        self.request = request
+        self.extra_opts = extra_opts
+        if not self.extra_opts:
+            self.extra_opts = {}
         self.retransmit = None
         self.file_iterator = None
 
@@ -69,7 +66,9 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         as handling option negotiation (if applicable).
         """
         try:
+            self.set_proto_attributes()
             self.initialize_transfer()
+
             if self.r_opts:
                 self.counter = 0
                 pkt = self.oack_packet()
@@ -92,6 +91,18 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 
         if self.is_err(pkt):
             self.handle_err_pkt()
+
+    def set_proto_attributes(self):
+        """
+        Sets the self.filename , self.opts, and self.r_opts.
+        The caller should handle any exceptions and react accordingly
+        ie. send error packet, close connection, etc.
+        """
+        self.filename, _, self.r_opts = self.validate_req(
+            *self.parse_req(self.request))
+        logging.debug(self.r_opts)
+        self.opts = {**self.default_opts, **self.extra_opts, **self.r_opts}
+        logging.debug(self.opts)
 
     def connection_lost(self, exc):
         """
@@ -262,9 +273,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 class WRQProtocol(BaseTFTPProtocol):
     def __init__(self, wrq, addr, *args):
         super().__init__(wrq, addr, *args)
-        logging.info(
-            'Initiating WRQProtocol, recving file "{0}" from {1}'.format(
-                self.filename, self.remote_addr))
+        logging.info('Initiating WRQProtocol with {0}'.format(
+            self.remote_addr))
 
     def is_data(self, data):
         return data[:2] == DAT
@@ -331,9 +341,8 @@ class WRQProtocol(BaseTFTPProtocol):
 class RRQProtocol(BaseTFTPProtocol):
     def __init__(self, rrq, addr, *args):
         super().__init__(rrq, addr, *args)
-        logging.info(
-            'Initiating RRQProtocol, sending file "{0}" to {1}'.format(
-                self.filename, self.remote_addr))
+        logging.info('Initiating RRQProtocol with {0}'.format(
+            self.remote_addr))
 
     def is_ack(self, data):
         return data[:2] == ACK

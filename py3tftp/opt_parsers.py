@@ -2,6 +2,8 @@ import os
 import os.path as opath
 import logging
 
+from .exceptions import UnacknowledgedOption
+
 
 class TFTPOptParserMixin(object):
     def validate_req(self, fname, mode, opts):
@@ -14,7 +16,14 @@ class TFTPOptParserMixin(object):
             logging.debug(option)
             if option in self.supported_opts.keys():
                 logging.debug(option)
-                options[option] = self.supported_opts[option](value)
+                try:
+                    options[option] = self.supported_opts[option]()(value)
+                except UnacknowledgedOption as e:
+                    logging.debug(e)
+                except ValueError:
+                    logging.debug(
+                        ('Client passed malformed option "{0}": "{1}", '
+                         'ignoring').format(option, value))
 
         return (fname.decode(encoding='ascii'), mode, options)
 
@@ -38,3 +47,38 @@ class TFTPOptParserMixin(object):
             root_dir,
             opath.normpath(
                 '/' + fname).lstrip('/'))
+
+
+class BlksizeParser(object):
+    lower_bound = 8
+    upper_bound = 65464
+
+    def __call__(self, value):
+        return self._validate(int(value))
+
+    def _validate(self, value):
+        if value > self.upper_bound:
+            return value - (value - self.upper_bound)
+        elif value < self.lower_bound:
+            raise UnacknowledgedOption(
+                'Requested blksize "{0}" below RFC-spec limit ({1})'.format(
+                    value, self.lower_bound))
+        else:
+            return value
+
+
+class TimeoutParser(object):
+    lower_bound = 1
+    upper_bound = 255
+
+    def __call__(self, value):
+        return self._validate(float(value))
+
+    def _validate(self, value):
+        if value > self.upper_bound or value < self.lower_bound:
+            raise UnacknowledgedOption(
+                ('Requested timeout "{0}" outside of RFC-spec range '
+                 '({1} - {2})').format(
+                     value, self.lower_bound, self.upper_bound))
+        else:
+            return value

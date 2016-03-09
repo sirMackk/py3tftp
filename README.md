@@ -11,6 +11,12 @@ Some Py3k stuff it uses:
 - [Tracebacks attached to exceptions][9] - woo!
 - Strings are now bytes because all text is unicode
 
+### Installation
+
+```
+pip install py3tftp
+```
+
 ### Usage
 
 Invoking pyt3tftp will start a server that will interact with the current working directory - it will read and write files from it so don't run it in a place with sensitive files!
@@ -20,8 +26,8 @@ TFTP has no security features, except for its simplicity:
 - Nor create non-existant directories.
 
 ```
-usage: py3tftp [-h] [--host HOST] [-p PORT] [--ack-timeout ACK_TIMEOUT]
-               [--conn-timeout CONN_TIMEOUT] [-l FILE_LOG] [-v] [--version]
+usage: __main__.py [-h] [--host HOST] [-p PORT] [--ack-timeout ACK_TIMEOUT]
+                   [--timeout TIMEOUT] [-l FILE_LOG] [-v] [--version]
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -32,8 +38,7 @@ optional arguments:
                         privileges.
   --ack-timeout ACK_TIMEOUT
                         Timeout for each ACK of the lock-step. Default: 0.5.
-  --conn-timeout CONN_TIMEOUT
-                        Timeout before the server gives up on a transfer and
+  --timeout TIMEOUT     Timeout before the server gives up on a transfer and
                         closes the connection. Default: 3.
   -l FILE_LOG, --file-log FILE_LOG
                         Append output to log file.
@@ -79,8 +84,9 @@ In order to incorporate the new option, you would look at overloading methods th
 #### Roadplan
 
 - fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.
+- Pull out file reader/writer from protocol classes.
 - Add tsize from RFC 2349.
-- Add blksize, timeout, and tsize tests.
+    - Add ~~blksize~~, ~~timeout~~, and tsize tests.
 - Possibly implement RFCs 906 and 951 for fun!
 
 #### LICENSE
