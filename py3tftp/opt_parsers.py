@@ -6,10 +6,15 @@ from .exceptions import UnacknowledgedOption
 
 
 class TFTPOptParserMixin(object):
+    """
+    This mixin adds methods that parse TFTP read/write requests, TFTP options,
+    as well as parse filenames.
+    """
+
     def validate_req(self, fname, mode, opts):
         """
-        Filters 'opts' to get rid of options absent from self.supported_opts
-        and casts the filtered options to expected types.
+        Reads a RRQ or WRQ and parses it for a filename, a mode, and
+        optionally, a list of TFTP options.
         """
         options = {}
         for option, value in opts.items():
@@ -17,7 +22,7 @@ class TFTPOptParserMixin(object):
             if option in self.supported_opts.keys():
                 logging.debug(option)
                 try:
-                    options[option] = self.supported_opts[option]()(value)
+                    options[option] = self.supported_opts[option](value)
                 except UnacknowledgedOption as e:
                     logging.debug(e)
                 except ValueError:
@@ -49,36 +54,36 @@ class TFTPOptParserMixin(object):
                 '/' + fname).lstrip('/'))
 
 
-class BlksizeParser(object):
+def blksize_parser(val):
+    """
+    Parses and validates the 'blksize' option against the RFC 2348.
+    """
     lower_bound = 8
     upper_bound = 65464
 
-    def __call__(self, value):
-        return self._validate(int(value))
-
-    def _validate(self, value):
-        if value > self.upper_bound:
-            return value - (value - self.upper_bound)
-        elif value < self.lower_bound:
-            raise UnacknowledgedOption(
-                'Requested blksize "{0}" below RFC-spec limit ({1})'.format(
-                    value, self.lower_bound))
-        else:
-            return value
+    value = int(val)
+    if value > upper_bound:
+        return value - (value - upper_bound)
+    elif value < lower_bound:
+        raise UnacknowledgedOption(
+            'Requested blksize "{0}" below RFC-spec limit ({1})'.format(
+                value, lower_bound))
+    else:
+        return value
 
 
-class TimeoutParser(object):
+def timeout_parser(val):
+    """
+    Parses and validates the 'timeout' option against RFC 2349.
+    """
     lower_bound = 1
     upper_bound = 255
 
-    def __call__(self, value):
-        return self._validate(float(value))
+    value = float(val)
 
-    def _validate(self, value):
-        if value > self.upper_bound or value < self.lower_bound:
-            raise UnacknowledgedOption(
-                ('Requested timeout "{0}" outside of RFC-spec range '
-                 '({1} - {2})').format(
-                     value, self.lower_bound, self.upper_bound))
-        else:
-            return value
+    if value > upper_bound or value < lower_bound:
+        raise UnacknowledgedOption(
+            ('Requested timeout "{0}" outside of RFC-spec range '
+             '({1} - {2})').format(value, lower_bound, upper_bound))
+    else:
+        return value

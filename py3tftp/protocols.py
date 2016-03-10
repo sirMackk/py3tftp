@@ -2,7 +2,7 @@ import logging
 import asyncio
 
 from .exceptions import ProtocolException
-from .opt_parsers import TFTPOptParserMixin, BlksizeParser, TimeoutParser
+from .opt_parsers import TFTPOptParserMixin, blksize_parser, timeout_parser
 
 RRQ = b'\x00\x01'
 WRQ = b'\x00\x02'
@@ -14,8 +14,8 @@ OCK = b'\x00\x06'
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
     supported_opts = {
-         b'blksize': BlksizeParser,
-         b'timeout': TimeoutParser,
+         b'blksize': blksize_parser,
+         b'timeout': timeout_parser,
     }
 
     default_opts = {
