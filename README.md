@@ -54,39 +54,28 @@ I wrote some simple acceptance tests in `tests/acceptance/*_test.py`. The code i
 python tests/acceptance/*_.py
 ```
 
-#### Extending the Protocols
+#### Extending py3tftp
 
-There are two protocols: one for handling read requests (RRQProtocol) and one for handling write requests (WRQProtocol). Each has methods that manage the state of a single read or write connection and take care of accepting correct messages, sending replies, reading or writing the next chunk of a file, etc.
+The way that this module works is that there's a subclass of `BaseTFTPServerProtocol` scheduled on the IO loop that listens for incoming TFTP requests and decides what kind of `BaseTFTPProtocol` to schedule on the IO loop to handle the incoming request.
 
-Both of these protocol inherit from BaseTFTPProtocol, which takes care of lower level operations such as parsing an initial request, performing OS checks on files (permissions, existance, etc.), as well as tackle resending unacknowledged datagrams and timing out connections. This class mixes in the TFTPOptParserMixin, which parses requests, and validates options and the filename. TFTP options are validated against a dict of supported options in the BaseTFTPProtocol class.
+The way this works in the default scenario is that `TFTPServerProtocol` listens to incoming requests. When a request comes in, it selects either the `WRQProtocol` or the `RRQProtocol` to create a task in the IO loop and passes the request to the selected protocol upon instantiation. From then on, the instantiated protocol handles all of the communication with the client and the _TFTPServerProtocol_ goes back to listening for requests.
 
-##### Example Scenario
+This amazing diagram illustrates the above process in the case of a RRQ request:
 
-If you'd want to allow py3tftp to handle non-spec protocol options, you'd extend either the RRQProtocol or WRQProtocol class and create a custom `supported_opts` property with the extra option, followed by adding a custom `default_opts` property that contains a default for the new options.
+![py3tftp rrq process diagram](tftp_graph.png)
 
-```
-class RickAstelyProtocol(RRQProtocol):
-    supported_opts = {
-        **RRQProtocol.supported_opts, 
-        b'nvr_gvup': lambda i: bytes(i, encoding='ascii')}
-    default_opts = {
-        **RRQProtocol.default_opts,
-        b'nvr_gvup': b'let you down'
-    }
-```
+Extending py3tftp is as easy as:
 
-The above ensures that the new option is accepted and made available during a connection.
-
-In order to incorporate the new option, you would look at overloading methods that handle data and connections: `datagram_received`, `connection_made`, `connection_lost`, `initialize_transfer` / `handle_initialization`. In our scenario, we want to check if the requested file contains the _let you down_ string before serving it
-
-
+- Subclassing `BaseTFTPServerProtocol`, mainly to implement the `select_protocol` method to select your custom protocol.
+- Subclassing either `RRQProtocol` or `WRQProtocol` to implement your own logic (new options, file handling, etc.) for standard WRQ and RRQ requests, OR...
+- Subclassing `BaseTFTPProtocol` to implement your own logic for a custom type of request.
 
 #### Roadplan
 
 - fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.
 - Pull out file reader/writer from protocol classes.
 - Add tsize from RFC 2349.
-    - Add ~~blksize~~, ~~timeout~~, and tsize tests.
+- Add ~~blksize~~, ~~timeout~~, and tsize tests.
 - Possibly implement RFCs 906 and 951 for fun!
 
 #### LICENSE

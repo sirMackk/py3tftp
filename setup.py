@@ -13,7 +13,7 @@ setup(
     description='Python 3 asynchronous TFTP server.',
     long_description=readme(),
     url='http://github.com/sirMackk/py3tftp',
-    author='Matt Obarzanek',
+    author='Matt O.',
     author_email='matt@mattscodecave.com',
     license='MIT',
     keywords='async asynchronous tftp',
