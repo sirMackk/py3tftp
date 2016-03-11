@@ -46,7 +46,16 @@ class TestBlksize(unittest.TestCase):
         blksize = 1075
         blk_rrq = self.blk_rrq % blksize
         self.s.sendto(blk_rrq, self.server_addr)
-        ock, addr = self.s.recvfrom(1024)
+        ock, addr = self.s.recvfrom(16)
+        self.s.sendto(h.ACK + b'\x00\x00', addr)
+        data, _ = self.s.recvfrom(blksize + 4)
+
+        self.assertEqual(len(data), blksize + 4)
+        self.s.sendto(h.ACK + b'\x00\x01', addr)
+        # should receive empty DAT
+        data, _ = self.s.recvfrom(8)
+        self.assertEqual(data, h.DAT + b'\x00\x02')
+        self.assertEqual(len(data), 4)
 
     def test_effective_blksize(self):
         blksize = 675

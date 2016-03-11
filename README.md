@@ -72,7 +72,7 @@ Extending py3tftp is as easy as:
 
 #### Roadplan
 
-- fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.
+- ~~fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.~~
 - Pull out file reader/writer from protocol classes.
 - Add tsize from RFC 2349.
 - Add ~~blksize~~, ~~timeout~~, and tsize tests.

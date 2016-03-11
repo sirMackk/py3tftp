@@ -32,6 +32,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
             self.extra_opts = {}
         self.retransmit = None
         self.file_iterator = None
+        self.finished = False
 
     def datagram_received(self, data, addr):
         """
@@ -245,7 +246,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         """
         return int.from_bytes(data, byteorder='big')
 
-    def pack_data(self, data, block_no):
+    def pack_data(self, data=b'', block_no=0):
         """
         Builds a data packet.
         """
@@ -375,9 +376,14 @@ class RRQProtocol(BaseTFTPProtocol):
                 self.counter += 1
                 packet = self.next_datagram()
                 self.reply_to_client(packet)
+                if len(packet) < self.opts[b'blksize']:
+                    self.finished = True
             except StopIteration:
                 logging.info('Sending file "{0}" to {1} completed'.format(
                     self.filename, self.remote_addr))
+                if not self.finished:
+                    last_dat = self.pack_data(block_no=self.counter)
+                    self.reply_to_client(last_dat)
                 self.transport.close()
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(

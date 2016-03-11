@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 0.0.5 (March xth, 2016)
+
+- Fixes off by one server response to RRQs that are the multiple of the file's size.
+
 ### 0.0.4 (March x, 2016)
 
 - Adds CHANGELOG.md
