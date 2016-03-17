@@ -1,3 +1,4 @@
+import typing
 import argparse
 import logging
 from sys import exit
@@ -16,11 +17,11 @@ logging_config = {
 }
 
 
-def print_version():
+def print_version() -> None:
     print("py3tftp version: {}".format(__version__))
 
 
-def parse_cli_arguments():
+def parse_cli_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(epilog=EPILOG)
     parser.add_argument('--host',
                         default='0.0.0.0',

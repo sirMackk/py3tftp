@@ -1,5 +1,7 @@
 import os
 import os.path as opath
+import typing
+from typing import Tuple, Dict, Any
 import logging
 
 from .exceptions import UnacknowledgedOption
@@ -11,12 +13,17 @@ class TFTPOptParserMixin(object):
     as well as parse filenames.
     """
 
-    def validate_req(self, fname, mode, opts):
+    def validate_req(self,
+                     fname: bytes,
+                     mode: bytes,
+                     opts: Dict[bytes, Any]) -> Tuple[bytes,
+                                                      bytes,
+                                                      Dict[bytes, Any]]:
         """
         Reads a RRQ or WRQ and parses it for a filename, a mode, and
         optionally, a list of TFTP options.
         """
-        options = {}
+        options = {} # type: Dict[bytes, Any]
         for option, value in opts.items():
             logging.debug(option)
             if option in self.supported_opts.keys():
@@ -32,7 +39,10 @@ class TFTPOptParserMixin(object):
 
         return (fname.decode(encoding='ascii'), mode, options)
 
-    def parse_req(self, req):
+    def parse_req(self,
+                  req: bytes) -> Tuple[bytes,
+                                       bytes,
+                                       Dict[bytes, Any]]:
         """
         Seperates \x00 delimited byte string contents according to RFC1350:
         'filename\x00mode\x00opt1\x00val1\x00optN\x00valN\x00' into a
@@ -43,7 +53,7 @@ class TFTPOptParserMixin(object):
         options = dict(zip(opts[::2], opts[1::2]))
         return fname, mode, options
 
-    def sanitize_fname(self, fname):
+    def sanitize_fname(self, fname: bytes) -> bytes:
         """
         Ensures that fname is a path under the current working directory.
         """
@@ -54,7 +64,7 @@ class TFTPOptParserMixin(object):
                 '/' + fname).lstrip('/'))
 
 
-def blksize_parser(val):
+def blksize_parser(val: bytes) -> int:
     """
     Parses and validates the 'blksize' option against the RFC 2348.
     """
@@ -72,7 +82,7 @@ def blksize_parser(val):
         return value
 
 
-def timeout_parser(val):
+def timeout_parser(val: bytes) -> float:
     """
     Parses and validates the 'timeout' option against RFC 2349.
     """

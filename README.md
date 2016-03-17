@@ -51,7 +51,10 @@ optional arguments:
 I wrote some simple acceptance tests in `tests/acceptance/*_test.py`. The code is messy as it's meant to be thrown away.
 
 ```
-python tests/acceptance/*_.py
+# runs the server with python -m py3tftp
+# runs unittests under tests/
+# kills the server
+./test.sh
 ```
 
 #### Extending py3tftp
