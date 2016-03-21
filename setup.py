@@ -1,10 +1,20 @@
 from setuptools import setup
 from py3tftp import __version__
 
+try:
+    import pypandoc
+except ImportError:
+    pypandoc = None
+
 
 def readme():
-    with open('README.md') as f:
-        return f.read()
+    with open('README.md', 'r') as f:
+        readme_md = f.read()
+        if pypandoc:
+            readme_rst = pypandoc.convert(readme_md, 'rst', format='md')
+            return readme_rst
+        else:
+            return readme_md
 
 
 setup(

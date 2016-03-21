@@ -1,8 +1,11 @@
 # CHANGELOG
 
-### 0.0.5 (March xth, 2016)
+### 0.0.5 (March 21st, 2016)
 
 - Fixes off by one server response to RRQs that are the multiple of the file's size.
+- Adds type hints.
+- Makes 'long description' rst.
+- Adds test.sh to make running tests easier.
 
 ### 0.0.4 (March x, 2016)
 

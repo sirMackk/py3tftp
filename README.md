@@ -26,7 +26,7 @@ TFTP has no security features, except for its simplicity:
 - Nor create non-existant directories.
 
 ```
-usage: __main__.py [-h] [--host HOST] [-p PORT] [--ack-timeout ACK_TIMEOUT]
+usage: py3tftp [-h] [--host HOST] [-p PORT] [--ack-timeout ACK_TIMEOUT]
                    [--timeout TIMEOUT] [-l FILE_LOG] [-v] [--version]
 
 optional arguments:
