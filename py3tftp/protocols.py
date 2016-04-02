@@ -7,9 +7,34 @@ import tftp_parsing
 
 
 # create subclasses of this for each packet type perhaps
-# finishes rrqprotocol
-# figure out better if/elif handling
-class TFTPPacket(object):
+# finish to_bytes (connected with better if else-handling)
+# move all packet stuff into own module, inject factory into protocol 
+class TFTPPacketFactory(object):
+    # make into singleton
+    # inject tftp_parsing
+    @classmethod
+    def from_bytes(data):
+        try:
+            type = self.pkt_types[data[:2]]
+        except KeyError:
+            pass #bad packet type, discard
+
+        if type in ('RRQ', 'WRQ'):
+            fname, mode, r_opts = tftp_parsing.validate_req(
+                *tftp_parsing.parse_req(data))
+            # handle both classes here - create one request class?
+            return cls(type, fname=fname, mode=mode, r_opts=r_opts)
+        elif type == 'DAT':
+            block_no = unpack_short(data[2:4])
+            return TFTPDatPacket(type, block_no=block_no, data=data[4:])
+        elif type == 'ACK':
+            block_no = unpack_short(data[2:4])
+            return TFTPAckPacket(type, block_no=block_no)
+        elif type == 'ERR':
+            # parse error packets
+            return TFTPErrPacket(type, err_code=0, err_msg='ErrMsg')
+
+class BaseTFTPPacket(object):
     pkt_types = {
         b'\x00\x01': 'RRQ',
         b'\x00\x02': 'WRQ',
@@ -19,67 +44,39 @@ class TFTPPacket(object):
         b'\x00\x06': 'OCK',
     }
 
-    def __init__(self, type, **kwargs):
-        self.type = type
-        try:
-            if self.type in ('RRQ', 'WRQ'):
-                self.fname = kwargs['fname']
-                self.mode = kwargs['mode']
-                self.r_opts = kwargs['r_opts']
-            elif self.type == 'DAT':
-                self.block_no = kwargs['block_no']
-                self.data = kwargs['data']
-            elif self.type == 'ACK':
-                self.block_no = kwargs['block_no']
-            elif self.type == 'ERR':
-                self.err_code = kwargs['err_code']
-                self.err_msg = kwargs['err_msg']
-            elif self.type == 'OCK':
-                self.r_opts = kwargs['r_opts']
-        except KeyError as e:
-            logging.warning(
-                'Packet of type {0} requires {1} keyword arg'.format(
-                    self.type, e.args[0]))
+    def __init__(self):
+        self.type = None
+        self._bytes_cache = None
 
-    def is_data(self) -> bool:
-        return self.type == 'ACK'
-
-    def is_correct_data(self, expected_block_no: int) -> bool:
-        """
-        Checks whether incoming data packet has the expected block number.
-        """
-        return expected_block_no == self.block_no
+    def to_bytes(self):
+        raise NotImplementedError
 
     def is_ack(self, data: bytes) -> bool:
-        return self.type == 'DAT'
+        return self.type == 'ACK'
 
+    # unify into one function
     def is_correct_ack(self, expected_block_no: int) -> bool:
         """
         Checks if ACK is correct in sequence.
         """
         return expected_block_no == self.block_no
 
+    def is_correct_data(self, expected_block_no: int) -> bool:
+        """
+        Checks whether incoming data packet has the expected block number.
+        """
+        return expected_block_no == self.block_no
+    ###
+
+    def is_data(self) -> bool:
+        return self.type == 'DAT'
+
     def is_err(self, pkt: bytes) -> bool:
         return self.type == 'ERR'
 
-    def to_bytes(self):
-        if self.type == 'OCK':
-            return self.oack_packet()
-        elif self.type == 'ERR':
-            return self.types['ERR'] + TFTPPacket.pack_short(
-                self.err_code) + bytes(self.err_msg)
-
-    def oack_packet(self) -> bytes:
-        """
-        Builds a OACK response that contains accepted options.
-        """
-
-        options = b'\x00'.join(
-            b'\x00'.join(
-                (k, v if isinstance(v, bytes) else number_to_bytes(v)))
-            for k, v in self.r_opts.items())
-
-        return self.OCK + options + b'\x00'
+    @property
+    def size(self):
+        raise NotImplementedError
 
     @classmethod
     def number_to_bytes(val: Union[int, float]) -> bytes:
@@ -87,28 +84,6 @@ class TFTPPacket(object):
         Changes a number to an ascii byte string.
         """
         return bytes(str(int(val)), encoding='ascii')
-
-
-    @classmethod
-    def from_bytes(cls, data):
-        try:
-            type = self.pkt_types[data[:2]]
-        except KeyError:
-            pass #bad packet type, discard
-
-        if self.type in ('RRQ', 'WRQ'):
-            fname, mode, r_opts = tftp_parsing.validate_req(
-                *tftp_parsing.parse_req(data))
-            return cls(type, fname=fname, mode=mode, r_opts=r_opts)
-        elif self.type == 'DAT':
-            block_no = unpack_short(data[2:4])
-            return cls(type, block_no=block_no, data=data[4:])
-        elif self.type == 'ACK':
-            block_no = unpack_short(data[2:4])
-            return cls(type, block_no=block_no)
-        elif self.type == 'ERR':
-            # parse error packets
-            return cls(type, err_code=0, err_msg='ErrMsg')
 
     @classmethod
     def pack_short(number: int) -> bytes:
@@ -139,6 +114,37 @@ class TFTPPacket(object):
     @classmethod
     def err_unknown_tid(self) -> bytes:
         return cls('ERR', 5, 'Unknown transfer id')
+
+class TFTPAckPacket(BaseTFTPPacket):
+    def __init__(self, type, **kwargs):
+        super().__init__(self)
+        self.type = 'ACK'
+        self.block_no = kwargs['block_no']
+
+    def to_bytes(self):
+        # build DAT packet
+
+    @property
+    def size(self):
+        # get size of header, block_no, and data
+
+
+
+class TFTPDatPacket(BaseTFTPPacket):
+    def __init__(self, type, **kwargs):
+        super().__init__(self)
+        self.type = 'DAT'
+
+        self.block_no = kwargs['block_no']
+        self.data = kwargs['data']
+
+
+    def to_bytes(self):
+        # build DAT packet
+
+    @property
+    def size(self):
+        # get size of header, block_no, and data
 
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
@@ -422,39 +428,39 @@ class RRQProtocol(BaseTFTPProtocol):
         logging.info('Initiating RRQProtocol with {0}'.format(
             self.remote_addr))
 
-    # redo
     def next_datagram(self) -> bytes:
-        # create packet to send
         packet = TFTPPacket('DAT',
                             block_no=self.counter,
                             data=next(self.file_iterator))
-        return packet.to_bytes()
+        return packet
 
     def initialize_transfer(self) -> None:
         self.counter = 1
         self.file_iterator = self.get_file_reader(self.filename)
 
-    # redo
     def datagram_received(self, data: bytes, addr: Tuple[str, int]) -> None:
         """
         Checks correctness of incoming datagrams, reset timers,
         increments message counter, send next chunk of requested file
         to client.
         """
+        packet = TFTPPacket.from_bytes(bytes)
         if (self.is_correct_tid(addr) and
-                self.is_ack(data) and
-                self.is_correct_ack(data)):
+                packet.is_ack(data) and
+                packet.is_correct_ack(data)):
             self.conn_timeout_reset()
             try:
                 self.counter += 1
                 packet = self.next_datagram()
-                self.reply_to_client(packet)
-                if len(packet) < self.opts[b'blksize']:
+                self.reply_to_client(packet.to_bytes())
+                if packet.size < self.opts[b'blksize']:
                     self.finished = True
             except StopIteration:
                 logging.info('Sending file "{0}" to {1} completed'.format(
                     self.filename, self.remote_addr))
+                # case where iterator reads and returns b''
                 if not self.finished:
+                    # move this out - wrong level of abstraction
                     last_dat = TFTPPacket('DAT',
                                           block_no=self.counter,
                                           data=b'')
