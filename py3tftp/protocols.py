@@ -6,14 +6,19 @@ from .exceptions import ProtocolException
 import tftp_parsing
 
 
-# create subclasses of this for each packet type perhaps
+# create subclasses of this for each packet type perhaps - OCK, ERR
 # finish to_bytes (connected with better if else-handling)
+# finish build_packet
 # move all packet stuff into own module, inject factory into protocol 
 class TFTPPacketFactory(object):
     # make into singleton
     # inject tftp_parsing
     @classmethod
+    def build_packet(type, **kwargs):
+        # get type and kwargs, return correct packet object
+    @classmethod
     def from_bytes(data):
+        # parse from bytes
         try:
             type = self.pkt_types[data[:2]]
         except KeyError:
@@ -30,6 +35,8 @@ class TFTPPacketFactory(object):
         elif type == 'ACK':
             block_no = unpack_short(data[2:4])
             return TFTPAckPacket(type, block_no=block_no)
+        elif type == 'OCK':
+            return TFTPOckPacket(opts=r_opts)
         elif type == 'ERR':
             # parse error packets
             return TFTPErrPacket(type, err_code=0, err_msg='ErrMsg')
@@ -42,6 +49,12 @@ class BaseTFTPPacket(object):
         b'\x00\x04': 'ACK',
         b'\x00\x05': 'ERR',
         b'\x00\x06': 'OCK',
+        'RRQ': b'\x00\x01',
+        'WRQ': b'\x00\x02',
+        'DAT': b'\x00\x03',
+        'ACK': b'\x00\x04',
+        'ERR': b'\x00\x05',
+        'OCK': b'\x00\x06',
     }
 
     def __init__(self):
@@ -54,19 +67,11 @@ class BaseTFTPPacket(object):
     def is_ack(self, data: bytes) -> bool:
         return self.type == 'ACK'
 
-    # unify into one function
-    def is_correct_ack(self, expected_block_no: int) -> bool:
-        """
-        Checks if ACK is correct in sequence.
-        """
-        return expected_block_no == self.block_no
-
-    def is_correct_data(self, expected_block_no: int) -> bool:
+    def is_correct_sequence(self, expected_block_no: int) -> bool:
         """
         Checks whether incoming data packet has the expected block number.
         """
         return expected_block_no == self.block_no
-    ###
 
     def is_data(self) -> bool:
         return self.type == 'DAT'
@@ -76,7 +81,7 @@ class BaseTFTPPacket(object):
 
     @property
     def size(self):
-        raise NotImplementedError
+        return len(self.to_bytes())
 
     @classmethod
     def number_to_bytes(val: Union[int, float]) -> bytes:
@@ -122,12 +127,8 @@ class TFTPAckPacket(BaseTFTPPacket):
         self.block_no = kwargs['block_no']
 
     def to_bytes(self):
-        # build DAT packet
-
-    @property
-    def size(self):
-        # get size of header, block_no, and data
-
+        return b''.join([self.pkt_types['ACK'],
+                         self.pack_short(self.block_no)])
 
 
 class TFTPDatPacket(BaseTFTPPacket):
@@ -140,11 +141,10 @@ class TFTPDatPacket(BaseTFTPPacket):
 
 
     def to_bytes(self):
-        # build DAT packet
+        return b''.join([self.pkt_types['DAT'],
+                         self.pack_short(self.block_no),
+                         self.data])
 
-    @property
-    def size(self):
-        # get size of header, block_no, and data
 
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
@@ -211,7 +211,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 
             if self.r_opts:
                 self.counter = 0 # type: int
-                pkt = TFTPPacket('OCK', r_opts=self.r_opts)
+                pkt = TFTPPacketFactory.build_packet('OCK', r_opts=self.r_opts)
             else:
                 pkt = self.next_datagram()
         except FileExistsError:
@@ -367,7 +367,7 @@ class WRQProtocol(BaseTFTPProtocol):
         """
         Builds an acknowledgement of a received data packet.
         """
-        return packet TFTPPacket('ACK', block_no=self.counter)
+        return TFTPAckPacket(block_no=self.counter)
 
 
     def initialize_transfer(self) -> None:
@@ -379,11 +379,11 @@ class WRQProtocol(BaseTFTPProtocol):
         Check correctness of received datagram, reset timers, increment
         counter, ACKnowledge datagram, save received data to file.
         """
-        packet = TFTPServerProtocol.from_bytes(data)
+        packet = TFTPPacketFactory.from_bytes(data)
 
         if (self.is_correct_tid(addr) and
                 packet.is_data() and
-                packet.is_correct_data(self.counter + 1)):
+                packet.is_correct_sequence(self.counter + 1)):
             self.conn_timeout_reset()
 
             self.counter += 1
@@ -429,9 +429,8 @@ class RRQProtocol(BaseTFTPProtocol):
             self.remote_addr))
 
     def next_datagram(self) -> bytes:
-        packet = TFTPPacket('DAT',
-                            block_no=self.counter,
-                            data=next(self.file_iterator))
+        packet = TFTPDatPacket(block_no=self.counter,
+                               data=next(self.file_iterator))
         return packet
 
     def initialize_transfer(self) -> None:
@@ -447,7 +446,7 @@ class RRQProtocol(BaseTFTPProtocol):
         packet = TFTPPacket.from_bytes(bytes)
         if (self.is_correct_tid(addr) and
                 packet.is_ack(data) and
-                packet.is_correct_ack(data)):
+                packet.is_correct_sequence(data)):
             self.conn_timeout_reset()
             try:
                 self.counter += 1
@@ -461,9 +460,7 @@ class RRQProtocol(BaseTFTPProtocol):
                 # case where iterator reads and returns b''
                 if not self.finished:
                     # move this out - wrong level of abstraction
-                    last_dat = TFTPPacket('DAT',
-                                          block_no=self.counter,
-                                          data=b'')
+                    last_dat = TFTPDatPacket(block_no=self.counter, data=b'')
                     self.reply_to_client(last_dat.to_bytes())
                 self.transport.close()
         else:
@@ -515,7 +512,7 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
 
         protocol = self.select_protocol(data, addr)
 
-        packet = TFTPPacket.from_bytes(data)
+        packet = TFTPPacketFactory.from_bytes(data)
         logging.debug('data: {}'.format(data))
 
         connect = self.loop.create_datagram_endpoint(
