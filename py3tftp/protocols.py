@@ -4,148 +4,11 @@ import asyncio
 
 from .exceptions import ProtocolException
 import tftp_parsing
+from tftp_packet import TFTPPacketFactory
 
 
-# create subclasses of this for each packet type perhaps - OCK, ERR
-# finish to_bytes (connected with better if else-handling)
-# finish build_packet
-# move all packet stuff into own module, inject factory into protocol 
-class TFTPPacketFactory(object):
-    # make into singleton
-    # inject tftp_parsing
-    @classmethod
-    def build_packet(type, **kwargs):
-        # get type and kwargs, return correct packet object
-    @classmethod
-    def from_bytes(data):
-        # parse from bytes
-        try:
-            type = self.pkt_types[data[:2]]
-        except KeyError:
-            pass #bad packet type, discard
-
-        if type in ('RRQ', 'WRQ'):
-            fname, mode, r_opts = tftp_parsing.validate_req(
-                *tftp_parsing.parse_req(data))
-            # handle both classes here - create one request class?
-            return cls(type, fname=fname, mode=mode, r_opts=r_opts)
-        elif type == 'DAT':
-            block_no = unpack_short(data[2:4])
-            return TFTPDatPacket(type, block_no=block_no, data=data[4:])
-        elif type == 'ACK':
-            block_no = unpack_short(data[2:4])
-            return TFTPAckPacket(type, block_no=block_no)
-        elif type == 'OCK':
-            return TFTPOckPacket(opts=r_opts)
-        elif type == 'ERR':
-            # parse error packets
-            return TFTPErrPacket(type, err_code=0, err_msg='ErrMsg')
-
-class BaseTFTPPacket(object):
-    pkt_types = {
-        b'\x00\x01': 'RRQ',
-        b'\x00\x02': 'WRQ',
-        b'\x00\x03': 'DAT',
-        b'\x00\x04': 'ACK',
-        b'\x00\x05': 'ERR',
-        b'\x00\x06': 'OCK',
-        'RRQ': b'\x00\x01',
-        'WRQ': b'\x00\x02',
-        'DAT': b'\x00\x03',
-        'ACK': b'\x00\x04',
-        'ERR': b'\x00\x05',
-        'OCK': b'\x00\x06',
-    }
-
-    def __init__(self):
-        self.type = None
-        self._bytes_cache = None
-
-    def to_bytes(self):
-        raise NotImplementedError
-
-    def is_ack(self, data: bytes) -> bool:
-        return self.type == 'ACK'
-
-    def is_correct_sequence(self, expected_block_no: int) -> bool:
-        """
-        Checks whether incoming data packet has the expected block number.
-        """
-        return expected_block_no == self.block_no
-
-    def is_data(self) -> bool:
-        return self.type == 'DAT'
-
-    def is_err(self, pkt: bytes) -> bool:
-        return self.type == 'ERR'
-
-    @property
-    def size(self):
-        return len(self.to_bytes())
-
-    @classmethod
-    def number_to_bytes(val: Union[int, float]) -> bytes:
-        """
-        Changes a number to an ascii byte string.
-        """
-        return bytes(str(int(val)), encoding='ascii')
-
-    @classmethod
-    def pack_short(number: int) -> bytes:
-        """
-        Create big-endian short byte string out of integer.
-        """
-        return number.to_bytes(2, byteorder='big')
-
-    @classmethod
-    def unpack_short(data: bytes) -> int:
-        """
-        Create integer out of big-endian short byte string.
-        """
-        return int.from_bytes(data, byteorder='big')
-
-    @classmethod
-    def err_file_exists(cls) -> bytes:
-        return cls('ERR', 6, 'File already exists')
-
-    @classmethod
-    def err_access_violation(self) -> bytes:
-        return cls('ERR', 2, 'Access violation')
-
-    @classmethod
-    def err_file_not_found(self) -> bytes:
-        return cls('ERR', 1, 'File not found')
-
-    @classmethod
-    def err_unknown_tid(self) -> bytes:
-        return cls('ERR', 5, 'Unknown transfer id')
-
-class TFTPAckPacket(BaseTFTPPacket):
-    def __init__(self, type, **kwargs):
-        super().__init__(self)
-        self.type = 'ACK'
-        self.block_no = kwargs['block_no']
-
-    def to_bytes(self):
-        return b''.join([self.pkt_types['ACK'],
-                         self.pack_short(self.block_no)])
-
-
-class TFTPDatPacket(BaseTFTPPacket):
-    def __init__(self, type, **kwargs):
-        super().__init__(self)
-        self.type = 'DAT'
-
-        self.block_no = kwargs['block_no']
-        self.data = kwargs['data']
-
-
-    def to_bytes(self):
-        return b''.join([self.pkt_types['DAT'],
-                         self.pack_short(self.block_no),
-                         self.data])
-
-
+# replace hard coded TFTPPacketFactory with an injectable one
+# update new code to use type hints
 
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
     supported_opts = {
@@ -211,20 +74,20 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 
             if self.r_opts:
                 self.counter = 0 # type: int
-                pkt = TFTPPacketFactory.build_packet('OCK', r_opts=self.r_opts)
+                pkt = TFTPPacketFactory.create_packet('ock', r_opts=self.r_opts)
             else:
                 pkt = self.next_datagram()
         except FileExistsError:
             logging.error('"{}" already exists! Cannot overwrite'.format(
                 self.filename))
-            pkt = TFTPPacket.err_file_exists()
+            pkt = TFTPPacketFactory.err_file_exists()
         except PermissionError:
             logging.error('Insufficient permissions to operate on "{}"'.format(
                 self.filename))
-            pkt = TFTPServerProtocol.err_access_violation()
+            pkt = TFTPPacketFactory.err_access_violation()
         except FileNotFoundError:
             logging.error('File "{}" does not exist!'.format(self.filename))
-            pkt = TFTPServerProtocol.err_file_not_found()
+            pkt = TFTPPacketFactory.err_file_not_found()
 
         logging.debug('opening pkt: {}'.format(pkt))
         self.send_opening_packet(pkt.to_bytes())
@@ -350,7 +213,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
             logging.warning(
                 'Unknown transfer id: expected {0}, got {1} instead.'.format(
                     self.remote_addr, addr))
-            self.transport.sendto(TFTPPacket.err_unknown_tid(), addr)
+            self.transport.sendto(TFTPPacketFactory.err_unknown_tid(), addr)
             return False
 
 
@@ -367,7 +230,9 @@ class WRQProtocol(BaseTFTPProtocol):
         """
         Builds an acknowledgement of a received data packet.
         """
-        return TFTPAckPacket(block_no=self.counter)
+        return TFTPPacketFactory.create_packet(
+            type='ack',
+            block_no=self.counter)
 
 
     def initialize_transfer(self) -> None:
@@ -429,9 +294,10 @@ class RRQProtocol(BaseTFTPProtocol):
             self.remote_addr))
 
     def next_datagram(self) -> bytes:
-        packet = TFTPDatPacket(block_no=self.counter,
-                               data=next(self.file_iterator))
-        return packet
+        return TFTPPacketFactory.create_packet(
+            type='dat',
+            block_no=self.counter,
+            data=next(self.file_iterator))
 
     def initialize_transfer(self) -> None:
         self.counter = 1
@@ -443,7 +309,7 @@ class RRQProtocol(BaseTFTPProtocol):
         increments message counter, send next chunk of requested file
         to client.
         """
-        packet = TFTPPacket.from_bytes(bytes)
+        packet = TFTPPacketFactory.from_bytes(bytes)
         if (self.is_correct_tid(addr) and
                 packet.is_ack(data) and
                 packet.is_correct_sequence(data)):
@@ -460,7 +326,9 @@ class RRQProtocol(BaseTFTPProtocol):
                 # case where iterator reads and returns b''
                 if not self.finished:
                     # move this out - wrong level of abstraction
-                    last_dat = TFTPDatPacket(block_no=self.counter, data=b'')
+                    last_dat = TFTPPacketFactory.create_packet(
+                        block_no=self.counter,
+                        data=b'')
                     self.reply_to_client(last_dat.to_bytes())
                 self.transport.close()
         else:
