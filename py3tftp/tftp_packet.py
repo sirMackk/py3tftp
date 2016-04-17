@@ -100,14 +100,15 @@ class BaseTFTPPacket(object):
     def is_err(self, pkt: bytes) -> bool:
         return self.type == 'ERR'
 
+    @property
+    def size(self):
+        return len(self.to_bytes())
+
+    @classmethod
     def serialize_options(self, optns):
         opt_items = [val for pair in self.options.items() for val in pair]
         opt_items = [str(val).encode('ascii') for val in opt_items]
         return b'\x00'.join(opt_items)
-
-    @property
-    def size(self):
-        return len(self.to_bytes())
 
     @classmethod
     def number_to_bytes(val: Union[int, float]) -> bytes:
@@ -142,7 +143,7 @@ class TFTPRequestPacket(BaseTFTPPacket):
         return b''.join([self.pkt_types[self.type],
                          self.fname.decode('ascii'),
                          self.mode.decode('ascii'),
-                         self.serialize_options(self.r_opts),
+                         BaseTFTPPacket.serialize_options(self.r_opts),
                          b'\x00'])
 
 
@@ -179,7 +180,7 @@ class TFTPOckPacket(BaseTFTPPacket):
 
     def to_byte(self):
         return b''.join([self.pkt_types['OCK'],
-                         self.serialize_options(self.options)])
+                         BaseTFTPPacket.serialize_options(self.options)])
 
 
 class TFTPErrPacket(BaseTFTPPacket):

@@ -1,7 +1,7 @@
 import unittest as t
 
 from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
-    TFTPErrPacket, TFTPRequestPacket)
+    TFTPErrPacket, TFTPRequestPacket, BaseTFTPPacket)
 
 
 class TestTFTPPacketService(t.TestCase):
@@ -12,22 +12,43 @@ class TestTFTPPacketService(t.TestCase):
 
 class TestBaseTFTPPacket(t.TestCase):
     def test_number_to_bytes(self):
-        pass
+        byte_no = BaseTFTPPacket.number_to_bytes(50)
+        self.assertEqual(b'50', byte_no)
 
     def test_pack_short(self):
-        pass
+        packed_short = BaseTFTPPacket.pack_short(10)
+        self.assertEqual(b'\x00\x0A', packed_short)
+
+    def test_pack_short_large_no(self):
+        packed_short = BaseTFTPPacket.pack_short(15421)
+        self.assertEqual(b'\x3c\x3d', packed_short)
+
+    def test_pack_neg_short_error(self):
+        with self.assertRaises(OverflowError):
+            BaseTFTPPacket.number_to_bytes(-10)
 
     def test_unpack_short(self):
-        pass
+        unpacked_short = BaseTFTPPacket.unpack_short(b'\x00\x0A')
+        self.assertEqual(10, unpacked_short)
+
+    def test_unpack_short_large_no(self):
+        unpacked_short = BaseTFTPPacket.unpack_short(b'\x3c\x3d')
+        self.assertEqual(15421, unpacked_short)
 
     def test_serialize_options_one_opt(self):
-        pass
+        opts = {'opt1': 123}
+        serialized_opts = BaseTFTPPacket.serialize_options(opts)
+        self.assertEqual(b'opt1\x00123', serialized_opts)
 
     def test_serialize_options_many_opt(self):
-        pass
+        opts = {'opt1': '123', 'opt2': 123}
+        serialized_opts = BaseTFTPPacket.serialize_options(opts)
+        self.assertEqual(b'opt1\x00123\x00opt2\x00123', serialized_opts)
 
     def test_serialize_options_zero(self):
-        pass
+        opts = {}
+        serialized_opts = BaseTFTPPacket.serialize_options(opts)
+        self.assertEqual(b'', serialized_opts)
 
 
 class TestTFTPErrPacket(t.TestCase):
