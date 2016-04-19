@@ -1,13 +1,37 @@
+from collections import OrderedDict
 import unittest as t
+from unittest.mock import patch, MagicMock
 
 from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
-    TFTPErrPacket, TFTPRequestPacket, BaseTFTPPacket)
+    TFTPErrPacket, TFTPRequestPacket, BaseTFTPPacket, TFTPPacketFactory)
 
 
 class TestTFTPPacketService(t.TestCase):
-    # test create_packet by mocking appropriate classes and checking for calls
-    # test from_bytes by mocking create_packet and checking for calls
-    pass
+    @patch('py3tftp.tftp_packet.TFTPRequestPacket')
+    def test_create_request_packet(self, req_packet):
+        TFTPPacketFactory.create_packet('RRQ', fname='test', mode='test')
+        req_packet.assert_called_once_with('RRQ', fname='test', mode='test')
+
+    @patch('py3tftp.tftp_packet.TFTPDatPacket')
+    def test_create_dat_packet(self, dat_packet):
+        TFTPPacketFactory.create_packet('DAT', block_no=1, data=b'test')
+        dat_packet.assert_called_once_with(block_no=1, data=b'test')
+
+    @patch('py3tftp.tftp_packet.TFTPAckPacket')
+    def test_create_ack_packet(self, ack_packet):
+        TFTPPacketFactory.create_packet('ACK', block_no=1)
+        ack_packet.assert_called_once_with(block_no=1)
+
+    @patch('py3tftp.tftp_packet.TFTPOckPacket')
+    def test_create_ock_packet(self, ock_packet):
+        TFTPPacketFactory.create_packet('OCK', r_opts ={'tsize': 512})
+        ock_packet.assert_called_once_with(r_opts={'tsize': 512})
+
+    @patch('py3tftp.tftp_packet.TFTPErrPacket')
+    def test_create_err_packet(self, err_packet):
+        TFTPPacketFactory.create_packet('ERR', code=1)
+        err_packet.assert_called_once_with(code=1)
+
 
 
 class TestBaseTFTPPacket(t.TestCase):
@@ -25,7 +49,7 @@ class TestBaseTFTPPacket(t.TestCase):
 
     def test_pack_neg_short_error(self):
         with self.assertRaises(OverflowError):
-            BaseTFTPPacket.number_to_bytes(-10)
+            BaseTFTPPacket.pack_short(-10)
 
     def test_unpack_short(self):
         unpacked_short = BaseTFTPPacket.unpack_short(b'\x00\x0A')
@@ -41,9 +65,11 @@ class TestBaseTFTPPacket(t.TestCase):
         self.assertEqual(b'opt1\x00123', serialized_opts)
 
     def test_serialize_options_many_opt(self):
-        opts = {'opt1': '123', 'opt2': 123}
+        opts = OrderedDict()
+        opts['opt1'] = '321'
+        opts['opt2'] = 123
         serialized_opts = BaseTFTPPacket.serialize_options(opts)
-        self.assertEqual(b'opt1\x00123\x00opt2\x00123', serialized_opts)
+        self.assertEqual(b'opt1\x00321\x00opt2\x00123', serialized_opts)
 
     def test_serialize_options_zero(self):
         opts = {}
@@ -55,12 +81,12 @@ class TestTFTPErrPacket(t.TestCase):
     def test_to_bytes(self):
         packet = TFTPErrPacket(code=1, msg='File not found')
         serialized = packet.to_bytes()
-        self.assertEqual(serialized, b'\x00\x05\x00\x01File not found')
+        self.assertEqual(serialized, b'\x00\x05\x00\x01File not found\x00')
 
 
 class TestTFTPOckPacket(t.TestCase):
     def test_to_bytes_w_1_opt(self):
-        packet = TFTPOckPacket(r_opts={'timeout', 25})
+        packet = TFTPOckPacket(r_opts={'timeout': 25})
         serialized = packet.to_bytes()
         self.assertEqual(serialized, b'\x00\x06timeout\x0025\x00')
 
@@ -69,8 +95,8 @@ class TestTFTPOckPacket(t.TestCase):
         serialized = packet.to_bytes()
         self.assertIn(b'timeout\x0025', serialized)
         self.assertIn(b'blksize\x002048', serialized)
-        self.assertEqual(serialized[-1], b'\x00')
-        self.assertEqual(serialized[:2], b'\x00\x06')
+        self.assertEqual(serialized[-1], 0)
+        self.assertIn(b'\x00\x06', serialized[:2])
 
 
 class TestTFTPDatPacket(t.TestCase):
@@ -113,10 +139,14 @@ class TestTFTPRequestPacket(t.TestCase):
         self.assertEqual(serialized, b'\x00\x02test\x00test_mode\x00')
 
     def test_wrq_with_opts(self):
-        packet = TFTPRequestPacket('rrq',
+        packet = TFTPRequestPacket('wrq',
                                    fname='test',
                                    mode='test_mode',
                                    r_opts={'timeout': 25})
         serialized = packet.to_bytes()
         self.assertEqual(serialized,
                          b'\x00\x02test\x00test_mode\x00timeout\x0025\x00')
+
+
+if __name__ == '__main__':
+    t.main()

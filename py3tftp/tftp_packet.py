@@ -1,3 +1,6 @@
+from typing import Union
+
+
 class TFTPPacketFactory(object):
     @classmethod
     def create_packet(cls, type=None, **kwargs):
@@ -105,27 +108,27 @@ class BaseTFTPPacket(object):
         return len(self.to_bytes())
 
     @classmethod
-    def serialize_options(self, optns):
-        opt_items = [val for pair in self.options.items() for val in pair]
+    def serialize_options(cls, options):
+        opt_items = [val for pair in options.items() for val in pair]
         opt_items = [str(val).encode('ascii') for val in opt_items]
         return b'\x00'.join(opt_items)
 
     @classmethod
-    def number_to_bytes(val: Union[int, float]) -> bytes:
+    def number_to_bytes(cls, val: Union[int, float]) -> bytes:
         """
         Changes a number to an ascii byte string.
         """
         return bytes(str(int(val)), encoding='ascii')
 
     @classmethod
-    def pack_short(number: int) -> bytes:
+    def pack_short(cls, number: int) -> bytes:
         """
         Create big-endian short byte string out of integer.
         """
         return number.to_bytes(2, byteorder='big')
 
     @classmethod
-    def unpack_short(data: bytes) -> int:
+    def unpack_short(cls, data: bytes) -> int:
         """
         Create integer out of big-endian short byte string.
         """
@@ -134,22 +137,23 @@ class BaseTFTPPacket(object):
 
 class TFTPRequestPacket(BaseTFTPPacket):
     def __init__(self, type, **kwargs):
-        self.type = type.upper().encode('ascii')
+        super().__init__()
+        self.type = type.upper()
         self.fname = kwargs['fname'].encode('ascii')
         self.mode = kwargs['mode'].encode('ascii')
         self.r_opts = kwargs.get('r_opts', {})
 
     def to_bytes(self):
-        return b''.join([self.pkt_types[self.type],
-                         self.fname.decode('ascii'),
-                         self.mode.decode('ascii'),
-                         BaseTFTPPacket.serialize_options(self.r_opts),
-                         b'\x00'])
+        packet = [self.pkt_types[self.type] + self.fname,
+                  self.mode,
+                  BaseTFTPPacket.serialize_options(self.r_opts)]
+
+        return b'\x00'.join([part for part in packet if part]) + b'\x00'
 
 
 class TFTPAckPacket(BaseTFTPPacket):
     def __init__(self, **kwargs):
-        super().__init__(self)
+        super().__init__()
         self.type = 'ACK'
         self.block_no = kwargs['block_no']
 
@@ -160,7 +164,7 @@ class TFTPAckPacket(BaseTFTPPacket):
 
 class TFTPDatPacket(BaseTFTPPacket):
     def __init__(self, **kwargs):
-        super().__init__(self)
+        super().__init__()
         self.type = 'DAT'
 
         self.block_no = kwargs['block_no']
@@ -174,24 +178,25 @@ class TFTPDatPacket(BaseTFTPPacket):
 
 class TFTPOckPacket(BaseTFTPPacket):
     def __init__(self, **kwargs):
-        super().__init__(self)
+        super().__init__()
         self.type = 'OCK'
         self.options = kwargs.get('r_opts', {})
 
-    def to_byte(self):
+    def to_bytes(self):
         return b''.join([self.pkt_types['OCK'],
-                         BaseTFTPPacket.serialize_options(self.options)])
+                         BaseTFTPPacket.serialize_options(self.options),
+                         b'\x00'])
 
 
 class TFTPErrPacket(BaseTFTPPacket):
     def __init__(self, **kwargs):
-        super().__init__(self)
+        super().__init__()
         self.type = 'ERR'
         self.code = kwargs['code']
         self.msg = kwargs['msg']
 
     def to_bytes(self):
-        return b''.join([self.pkt_types['OCK'],
+        return b''.join([self.pkt_types['ERR'],
                          BaseTFTPPacket.pack_short(self.code),
                          self.msg.encode('ascii'),
                          b'\x00'])
