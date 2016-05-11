@@ -7,29 +7,32 @@ from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
 
 
 class TestTFTPPacketService(t.TestCase):
+    def setUp(self):
+        self.packet_factory = TFTPPacketFactory()
+
     @patch('py3tftp.tftp_packet.TFTPRequestPacket')
     def test_create_request_packet(self, req_packet):
-        TFTPPacketFactory.create_packet('RRQ', fname='test', mode='test')
+        self.packet_factory.create_packet('RRQ', fname='test', mode='test')
         req_packet.assert_called_once_with('RRQ', fname='test', mode='test')
 
     @patch('py3tftp.tftp_packet.TFTPDatPacket')
     def test_create_dat_packet(self, dat_packet):
-        TFTPPacketFactory.create_packet('DAT', block_no=1, data=b'test')
+        self.packet_factory.create_packet('DAT', block_no=1, data=b'test')
         dat_packet.assert_called_once_with(block_no=1, data=b'test')
 
     @patch('py3tftp.tftp_packet.TFTPAckPacket')
     def test_create_ack_packet(self, ack_packet):
-        TFTPPacketFactory.create_packet('ACK', block_no=1)
+        self.packet_factory.create_packet('ACK', block_no=1)
         ack_packet.assert_called_once_with(block_no=1)
 
     @patch('py3tftp.tftp_packet.TFTPOckPacket')
     def test_create_ock_packet(self, ock_packet):
-        TFTPPacketFactory.create_packet('OCK', r_opts ={'tsize': 512})
+        self.packet_factory.create_packet('OCK', r_opts ={'tsize': 512})
         ock_packet.assert_called_once_with(r_opts={'tsize': 512})
 
     @patch('py3tftp.tftp_packet.TFTPErrPacket')
     def test_create_err_packet(self, err_packet):
-        TFTPPacketFactory.create_packet('ERR', code=1)
+        self.packet_factory.create_packet('ERR', code=1)
         err_packet.assert_called_once_with(code=1)
 
 

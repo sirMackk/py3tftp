@@ -1,35 +1,41 @@
 import os
 import os.path as opath
 import typing
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, Optional
 import logging
 
-from .exceptions import UnacknowledgedOption
+from .exceptions import UnacknowledgedOption, BadRequest
 
 
-# standalone parser now
-# remove self's
 """
 This module adds methods that parse TFTP read/write requests, TFTP options,
 as well as parse filenames.
 """
 
+
 def validate_req(fname: bytes,
                  mode: bytes,
-                 opts: Dict[bytes, Any]) -> Tuple[bytes,
+                 opts: Dict[bytes, Any],
+                 supported_opts: Optional[Dict[str, Any]] = None,
+                 default_opts: Optional[Dict[str, Any]] = None) -> Tuple[bytes,
                                                   bytes,
                                                   Dict[bytes, Any]]:
     """
-    Reads a RRQ or WRQ and parses it for a filename, a mode, and
-    optionally, a list of TFTP options.
+    Validates an RRQ or WRQ.
+    Currently only validates the optional "opts" parameter.
     """
-    options = {} # type: Dict[bytes, Any]
+    if not supported_opts:
+        supported_opts = {}
+    if not default_opts:
+        default_opts = {}
+
+    acknowledged_options = {} # type: Dict[bytes, Any]
     for option, value in opts.items():
         logging.debug(option)
-        if option in self.supported_opts.keys():
+        if option in supported_opts.keys():
             logging.debug(option)
             try:
-                options[option] = self.supported_opts[option](value)
+                acknowledged_options[option] = supported_opts[option](value)
             except UnacknowledgedOption as e:
                 logging.debug(e)
             except ValueError:
@@ -37,7 +43,7 @@ def validate_req(fname: bytes,
                     ('Client passed malformed option "{0}": "{1}", '
                      'ignoring').format(option, value))
 
-    return (fname.decode(encoding='ascii'), mode, options)
+    return (fname.decode(encoding='ascii'), mode, acknowledged_options)
 
 def parse_req(req: bytes) -> Tuple[bytes,
                                    bytes,
@@ -47,8 +53,11 @@ def parse_req(req: bytes) -> Tuple[bytes,
     'filename\x00mode\x00opt1\x00val1\x00optN\x00valN\x00' into a
     filename, a mode, and a dictionary of option:values.
     """
-    logging.debug("Reqest: {}".format(req))
-    fname, mode, *opts = [item for item in req.split(b'\x00') if item]
+    logging.debug("Request: {}".format(req))
+    try:
+        fname, mode, *opts = [item for item in req.split(b'\x00') if item]
+    except ValueError:
+        raise BadRequest("Could not parse request: {}".format(req))
     options = dict(zip(opts[::2], opts[1::2]))
     return fname, mode, options
 
@@ -63,13 +72,12 @@ def sanitize_fname(fname: bytes) -> bytes:
             '/' + fname).lstrip('/'))
 
 
-def blksize_parser(val: bytes) -> int:
+def blksize_parser(val: bytes,
+                   lower_bound: int = 8,
+                   upper_bound: int = 65464) -> int:
     """
     Parses and validates the 'blksize' option against the RFC 2348.
     """
-    lower_bound = 8
-    upper_bound = 65464
-
     value = int(val)
     if value > upper_bound:
         return value - (value - upper_bound)
@@ -81,13 +89,12 @@ def blksize_parser(val: bytes) -> int:
         return value
 
 
-def timeout_parser(val: bytes) -> float:
+def timeout_parser(val: bytes,
+                   lower_bound: int = 1,
+                   upper_bound: int = 255) -> float:
     """
     Parses and validates the 'timeout' option against RFC 2349.
     """
-    lower_bound = 1
-    upper_bound = 255
-
     value = float(val)
 
     if value > upper_bound or value < lower_bound:

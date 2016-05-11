@@ -7,9 +7,6 @@ import tftp_parsing
 from tftp_packet import TFTPPacketFactory
 
 
-# replace hard coded TFTPPacketFactory with an injectable one
-# update new code to use type hints
-
 class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
     supported_opts = {
          b'blksize': tftp_parsing.blksize_parser,
@@ -33,6 +30,9 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         self.retransmit = None
         self.file_iterator = None
         self.finished = False
+        self.packet_factory = TFTPPacketFactory(
+            supported_opts=self.supported_opts,
+            default_opts=self.default_opts)
 
     def datagram_received(self,
                           data: bytes,
@@ -74,20 +74,20 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
 
             if self.r_opts:
                 self.counter = 0 # type: int
-                pkt = TFTPPacketFactory.create_packet('ock', r_opts=self.r_opts)
+                pkt = self.packet_factory.create_packet('ock', r_opts=self.r_opts)
             else:
                 pkt = self.next_datagram()
         except FileExistsError:
             logging.error('"{}" already exists! Cannot overwrite'.format(
                 self.filename))
-            pkt = TFTPPacketFactory.err_file_exists()
+            pkt = self.packet_factory.err_file_exists()
         except PermissionError:
             logging.error('Insufficient permissions to operate on "{}"'.format(
                 self.filename))
-            pkt = TFTPPacketFactory.err_access_violation()
+            pkt = self.packet_factory.err_access_violation()
         except FileNotFoundError:
             logging.error('File "{}" does not exist!'.format(self.filename))
-            pkt = TFTPPacketFactory.err_file_not_found()
+            pkt = self.packet_factory.err_file_not_found()
 
         logging.debug('opening pkt: {}'.format(pkt))
         self.send_opening_packet(pkt.to_bytes())
@@ -213,7 +213,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
             logging.warning(
                 'Unknown transfer id: expected {0}, got {1} instead.'.format(
                     self.remote_addr, addr))
-            self.transport.sendto(TFTPPacketFactory.err_unknown_tid(), addr)
+            self.transport.sendto(self.packet_factory.err_unknown_tid(), addr)
             return False
 
 
@@ -230,7 +230,7 @@ class WRQProtocol(BaseTFTPProtocol):
         """
         Builds an acknowledgement of a received data packet.
         """
-        return TFTPPacketFactory.create_packet(
+        return self.packet_factory.create_packet(
             type='ack',
             block_no=self.counter)
 
@@ -244,7 +244,7 @@ class WRQProtocol(BaseTFTPProtocol):
         Check correctness of received datagram, reset timers, increment
         counter, ACKnowledge datagram, save received data to file.
         """
-        packet = TFTPPacketFactory.from_bytes(data)
+        packet = self.packet_factory.from_bytes(data)
 
         if (self.is_correct_tid(addr) and
                 packet.is_data() and
@@ -294,7 +294,7 @@ class RRQProtocol(BaseTFTPProtocol):
             self.remote_addr))
 
     def next_datagram(self) -> bytes:
-        return TFTPPacketFactory.create_packet(
+        return self.packet_factory.create_packet(
             type='dat',
             block_no=self.counter,
             data=next(self.file_iterator))
@@ -309,7 +309,7 @@ class RRQProtocol(BaseTFTPProtocol):
         increments message counter, send next chunk of requested file
         to client.
         """
-        packet = TFTPPacketFactory.from_bytes(bytes)
+        packet = self.packet_factory.from_bytes(bytes)
         if (self.is_correct_tid(addr) and
                 packet.is_ack(data) and
                 packet.is_correct_sequence(data)):
@@ -326,7 +326,7 @@ class RRQProtocol(BaseTFTPProtocol):
                 # case where iterator reads and returns b''
                 if not self.finished:
                     # move this out - wrong level of abstraction
-                    last_dat = TFTPPacketFactory.create_packet(
+                    last_dat = self.packet_factory.create_packet(
                         block_no=self.counter,
                         data=b'')
                     self.reply_to_client(last_dat.to_bytes())
@@ -339,7 +339,7 @@ class RRQProtocol(BaseTFTPProtocol):
         """
         Returns an iterator of a file, read in blksize chunks.
         """
-        fpath = self.sanitize_fname(fname)
+        fpath = tftp_parsing.sanitize_fname(fname)
 
         def iterator():
             with open(fpath, 'rb') as f:
@@ -380,7 +380,7 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
 
         protocol = self.select_protocol(data, addr)
 
-        packet = TFTPPacketFactory.from_bytes(data)
+        packet = self.packet_factory.from_bytes(data)
         logging.debug('data: {}'.format(data))
 
         connect = self.loop.create_datagram_endpoint(

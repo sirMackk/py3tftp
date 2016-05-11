@@ -8,3 +8,7 @@ class ProtocolException(Py3tftpError):
 
 class UnacknowledgedOption(Py3tftpError):
     pass
+
+
+class BadRequest(Py3tftpError):
+    pass
