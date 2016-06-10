@@ -3,11 +3,11 @@ import logging
 import asyncio
 
 from .exceptions import ProtocolException
-import tftp_parsing
-from tftp_packet import TFTPPacketFactory
+from py3tftp import tftp_parsing
+from py3tftp.tftp_packet import TFTPPacketFactory, BaseTFTPPacket
 
 
-class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
+class BaseTFTPProtocol(asyncio.DatagramProtocol):
     supported_opts = {
          b'blksize': tftp_parsing.blksize_parser,
          b'timeout': tftp_parsing.timeout_parser,
@@ -25,8 +25,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol, TFTPOptParserMixin):
         self.remote_addr = remote_addr
         self.packet = packet
         self.extra_opts = extra_opts
-        if not self.extra_opts:
-            self.extra_opts = {}
+        self.extra_opts = extra_opts or {}
         self.retransmit = None
         self.file_iterator = None
         self.finished = False
@@ -356,10 +355,10 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         self.host_interface = host_interface
         self.loop = loop
         self.extra_opts = extra_opts
+        self.packet_factory = TFTPPacketFactory()
 
     def select_protocol(self,
-                        request: bytes,
-                        remote_addr: Tuple[str, int]) -> BaseTFTPProtocol:
+                        request: bytes) -> BaseTFTPProtocol:
         """
         Selects an asyncio.Protocol-compatible protocol to
         feed to an event loop's 'create_datagram_endpoint'
@@ -378,10 +377,8 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         """
         logging.debug('received: {}'.format(data.decode()))
 
-        protocol = self.select_protocol(data, addr)
-
         packet = self.packet_factory.from_bytes(data)
-        logging.debug('data: {}'.format(data))
+        protocol = self.select_protocol(packet)
 
         connect = self.loop.create_datagram_endpoint(
             lambda: protocol(packet, addr, self.extra_opts),
@@ -394,14 +391,11 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
 
 
 class TFTPServerProtocol(BaseTFTPServerProtocol):
-    def select_protocol(self,
-                        req: bytes,
-                        remote_addr: Tuple[str, int]) -> BaseTFTPProtocol:
-        tx_type = req[:2]
-        logging.debug('tx_type: {}'.format(tx_type))
-        if tx_type == RRQ:
+    def select_protocol(self, packet: BaseTFTPPacket) -> BaseTFTPProtocol:
+        logging.debug('packet type: {}'.format(packet.pkt_type))
+        if packet.is_rrq():
             return RRQProtocol
-        elif tx_type == WRQ:
+        elif packet.is_wrq():
             return WRQProtocol
         else:
             raise ProtocolException('Received incompatible request, ignoring.')

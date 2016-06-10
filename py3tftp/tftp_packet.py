@@ -1,5 +1,8 @@
 from typing import Union
 
+from py3tftp import tftp_parsing
+from py3tftp.exceptions import BadRequest
+
 
 class TFTPPacketFactory(object):
     def __init__(self, supported_opts=None, default_opts=None):
@@ -25,39 +28,43 @@ class TFTPPacketFactory(object):
         elif pkt_type == 'ERR':
             return TFTPErrPacket(**kwargs)
 
-    def from_bytes(cls, data):
+    def from_bytes(self, data):
         try:
-            pkt_type = self.pkt_types[data[:2]].decode('ascii').upper()
+            pkt_type = BaseTFTPPacket.pkt_types[data[:2]].upper()
         except KeyError:
-            pass  # bad packet type, discard
+            raise BadRequest()
 
         if pkt_type in ('RRQ', 'WRQ'):
             fname, mode, r_opts = tftp_parsing.validate_req(
                 *tftp_parsing.parse_req(data),
                 supported_opts=self.supported_opts,
                 default_opts=self.default_opts)
-            return cls.create_packet(
+            return self.create_packet(
                 pkt_type=pkt_type,
                 fname=fname,
                 mode=mode,
                 r_opts=r_opts)
         elif pkt_type == 'DAT':
             block_no = BaseTFTPPacket.unpack_short(data[2:4])
-            return cls.create_packet(
+            return self.create_packet(
                 pkt_type=pkt_type,
                 block_no=block_no,
                 data=data[4:])
         elif pkt_type == 'ACK':
             block_no = BaseTFTPPacket.unpack_short(data[2:4])
-            return cls.create_packet(
+            return self.create_packet(
                 pkt_type=pkt_type,
                 block_no=block_no)
         elif pkt_type == 'OCK':
-            return cls.create_packet(pkt_type=pkt_type, opts=r_opts)
+            _, _, r_opts = tftp_parsing.validate_req(
+                *tftp_parsing.parse_req(data),
+                supported_opts=self.supported_opts,
+                default_opts=self.default_opts)
+            return self.create_packet(pkt_type=pkt_type, opts=r_opts)
         elif pkt_type == 'ERR':
             code = BaseTFTPPacket.unpack_short(data[2:4])
             msg = data[4:]
-            return cls.create_packet(pkt_type, code=code, msg=msg)
+            return self.create_packet(pkt_type, code=code, msg=msg)
 
     @classmethod
     def err_file_exists(cls) -> bytes:
@@ -99,7 +106,7 @@ class BaseTFTPPacket(object):
     def to_bytes(self):
         raise NotImplementedError
 
-    def is_ack(self, data: bytes) -> bool:
+    def is_ack(self) -> bool:
         return self.pkt_type == 'ACK'
 
     def is_correct_sequence(self, expected_block_no: int) -> bool:
@@ -111,8 +118,17 @@ class BaseTFTPPacket(object):
     def is_data(self) -> bool:
         return self.pkt_type == 'DAT'
 
-    def is_err(self, pkt: bytes) -> bool:
+    def is_err(self)-> bool:
         return self.pkt_type == 'ERR'
+
+    def is_rrq(self) -> bool:
+        return self.pkt_type == 'RRQ'
+
+    def is_wrq(self) -> bool:
+        return self.pkt_type == 'WRQ'
+
+    def is_ock(self) -> bool:
+        return self.pkt_type == 'OCK'
 
     @property
     def size(self):
@@ -146,12 +162,18 @@ class BaseTFTPPacket(object):
         return int.from_bytes(data, byteorder='big')
 
 
+def text_to_bytes(string):
+    if not isinstance(string, bytes):
+        return bytes(string, encoding='ascii')
+    return string
+
+
 class TFTPRequestPacket(BaseTFTPPacket):
     def __init__(self, pkt_type, **kwargs):
         super().__init__()
         self.pkt_type = pkt_type.upper()
-        self.fname = kwargs['fname'].encode('ascii')
-        self.mode = kwargs['mode'].encode('ascii')
+        self.fname = text_to_bytes(kwargs['fname'])
+        self.mode = text_to_bytes(kwargs['mode'])
         self.r_opts = kwargs.get('r_opts', {})
 
     def to_bytes(self):

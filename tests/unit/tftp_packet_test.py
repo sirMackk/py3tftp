@@ -2,6 +2,7 @@ from collections import OrderedDict
 import unittest as t
 from unittest.mock import patch, MagicMock
 
+from py3tftp.exceptions import BadRequest
 from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
     TFTPErrPacket, TFTPRequestPacket, BaseTFTPPacket, TFTPPacketFactory)
 
@@ -35,6 +36,40 @@ class TestTFTPPacketService(t.TestCase):
         self.packet_factory.create_packet('ERR', code=1)
         err_packet.assert_called_once_with(code=1)
 
+    def test_from_bytes_rrq(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x01TEST\x00binary\x00')
+        self.assertTrue(pkt.is_rrq())
+
+    def test_from_bytes_wrq(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x02TEST\x00binary\x00')
+        self.assertTrue(pkt.is_wrq())
+
+    def test_from_bytes_dat(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x03\x00\x01chunk')
+        self.assertTrue(pkt.is_data())
+
+    def test_from_bytes_ack(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x04\x00\x01')
+        self.assertTrue(pkt.is_ack())
+
+    def test_from_bytes_err(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x05\x00\x01error_msg\x00')
+        self.assertTrue(pkt.is_err())
+
+    def test_from_bytes_ock(self):
+        pkt = self.packet_factory.from_bytes(
+            b'\x00\x06blksize\x00512\x00')
+        self.assertTrue(pkt.is_ock())
+
+    def test_from_bytes_bad_packet(self):
+        with self.assertRaises(BadRequest):
+            pkt = self.packet_factory.from_bytes(
+                b'\x00\x00\x00blksize\x00512\x00')
 
 
 class TestBaseTFTPPacket(t.TestCase):
