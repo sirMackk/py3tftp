@@ -16,6 +16,7 @@ class TFTPPacketFactory(object):
         self.default_opts = default_opts
 
 
+    @classmethod
     def create_packet(cls, pkt_type=None, **kwargs):
         if pkt_type in ('RRQ', 'WRQ'):
             return TFTPRequestPacket(pkt_type, **kwargs)
@@ -68,19 +69,19 @@ class TFTPPacketFactory(object):
 
     @classmethod
     def err_file_exists(cls) -> bytes:
-        return cls.create_packet('err', 6, 'File already exists')
+        return cls.create_packet('ERR', code=6, msg='File already exists')
 
     @classmethod
-    def err_access_violation(self) -> bytes:
-        return cls.create_packet('err', 2, 'Access violation')
+    def err_access_violation(cls) -> bytes:
+        return cls.create_packet('ERR', code=2, msg='Access violation')
 
     @classmethod
-    def err_file_not_found(self) -> bytes:
-        return cls.create_packet('err', 1, 'File not found')
+    def err_file_not_found(cls) -> bytes:
+        return cls.create_packet('ERR', code=1, msg='File not found')
 
     @classmethod
-    def err_unknown_tid(self) -> bytes:
-        return cls.create_packet('err', 5, 'Unknown transfer id')
+    def err_unknown_tid(cls) -> bytes:
+        return cls.create_packet('ERR', code=5, msg='Unknown transfer id')
 
 
 class BaseTFTPPacket(object):

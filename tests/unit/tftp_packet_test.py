@@ -33,8 +33,8 @@ class TestTFTPPacketService(t.TestCase):
 
     @patch('py3tftp.tftp_packet.TFTPErrPacket')
     def test_create_err_packet(self, err_packet):
-        self.packet_factory.create_packet('ERR', code=1)
-        err_packet.assert_called_once_with(code=1)
+        self.packet_factory.create_packet('ERR', code=1, msg='Error')
+        err_packet.assert_called_once_with(code=1, msg='Error')
 
     def test_from_bytes_rrq(self):
         pkt = self.packet_factory.from_bytes(

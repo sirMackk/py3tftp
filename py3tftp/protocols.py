@@ -24,7 +24,6 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
                  extra_opts: Optional[Dict[str, Any]] = None) -> None:
         self.remote_addr = remote_addr
         self.packet = packet
-        self.extra_opts = extra_opts
         self.extra_opts = extra_opts or {}
         self.retransmit = None
         self.file_iterator = None
@@ -141,7 +140,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         self.reply_to_client(packet)
         self.h_timeout = asyncio.get_event_loop().call_later(
-            self.opts['timeout'], self.conn_timeout)
+            self.opts[b'timeout'], self.conn_timeout)
 
     def reply_to_client(self, packet: bytes) -> None:
         """
@@ -150,7 +149,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         self.transport.sendto(packet, self.remote_addr)
         self.retransmit = asyncio.get_event_loop().call_later(
-            self.opts['ack_timeout'], self.reply_to_client, packet)
+            self.opts[b'ack_timeout'], self.reply_to_client, packet)
 
     def handle_err_pkt(self) -> None:
         """
@@ -197,7 +196,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
         self.conn_reset()
         self.h_timeout = asyncio.get_event_loop().call_later(
-            self.opts['timeout'], self.conn_timeout)
+            self.opts[b'timeout'], self.conn_timeout)
 
 
     def is_correct_tid(self, addr: Tuple[str, int]) -> bool:
@@ -212,7 +211,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
             logging.warning(
                 'Unknown transfer id: expected {0}, got {1} instead.'.format(
                     self.remote_addr, addr))
-            self.transport.sendto(self.packet_factory.err_unknown_tid(), addr)
+            err_response = self.packet_factory.err_unknown_tid()
+            self.transport.sendto(err_response.to_bytes(), addr)
             return False
 
 
@@ -230,7 +230,7 @@ class WRQProtocol(BaseTFTPProtocol):
         Builds an acknowledgement of a received data packet.
         """
         return self.packet_factory.create_packet(
-            type='ack',
+            pkt_type='ACK',
             block_no=self.counter)
 
 
@@ -263,11 +263,11 @@ class WRQProtocol(BaseTFTPProtocol):
                 self.transport.close()
         else:
             logging.debug('Data: {0}; is_data: {1}; counter: {2}'.format(
-                data, self.is_data(data), self.counter))
+                data, packet.is_data(), self.counter))
 
     def get_file_writer(self, fname: bytes) -> Iterator:
         """
-        Returns an iterator function to read a file in blksize blocks.
+        Returns an iterator function to write a file in blksize blocks.
         """
         fpath = tftp_parsing.sanitize_fname(fname)
 
