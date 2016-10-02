@@ -208,7 +208,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         if self.remote_addr[1] == addr[1]:
             return True
         else:
-            logging.warning(
+            logging.info(
                 'Unknown transfer id: expected {0}, got {1} instead.'.format(
                     self.remote_addr, addr))
             err_response = self.packet_factory.err_unknown_tid()
@@ -294,7 +294,7 @@ class RRQProtocol(BaseTFTPProtocol):
 
     def next_datagram(self) -> bytes:
         return self.packet_factory.create_packet(
-            type='dat',
+            pkt_type='DAT',
             block_no=self.counter,
             data=next(self.file_iterator))
 
@@ -308,10 +308,10 @@ class RRQProtocol(BaseTFTPProtocol):
         increments message counter, send next chunk of requested file
         to client.
         """
-        packet = self.packet_factory.from_bytes(bytes)
+        packet = self.packet_factory.from_bytes(data)
         if (self.is_correct_tid(addr) and
-                packet.is_ack(data) and
-                packet.is_correct_sequence(data)):
+                packet.is_ack() and
+                packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
             try:
                 self.counter += 1
@@ -326,13 +326,14 @@ class RRQProtocol(BaseTFTPProtocol):
                 if not self.finished:
                     # move this out - wrong level of abstraction
                     last_dat = self.packet_factory.create_packet(
+                        pkt_type='DAT',
                         block_no=self.counter,
                         data=b'')
                     self.reply_to_client(last_dat.to_bytes())
                 self.transport.close()
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
-                data, self.is_ack(data), self.counter))
+                data, packet.is_ack(), self.counter))
 
     def get_file_reader(self, fname: bytes) -> Iterator:
         """

@@ -1,5 +1,5 @@
 import unittest as t
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 from py3tftp.protocols import (
     TFTPServerProtocol, RRQProtocol, WRQProtocol)
@@ -96,6 +96,79 @@ class TestWRQProtocol(t.TestCase):
     def test_bad_packet_sequence_is_ignored(self):
         data = DAT + b'\x00\x0CAAAA'
         self.proto.datagram_received(data, self.addr)
+
+        self.assertFalse(self.proto.transport.sendto.called)
+        self.assertFalse(self.proto.file_iterator.send.called)
+
+
+class TestRRQProtocol(t.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.packet_factory = TFTPPacketFactory()
+
+    def setUp(self):
+        self.addr = ('127.0.0.1', 9999,)
+        self.rrq = self.packet_factory.from_bytes(
+            RRQ + b'\x00filename1\x00octet\x00')
+        self.proto = RRQProtocol(self.rrq, self.addr, {})
+        self.proto.set_proto_attributes()
+        self.proto.h_timeout = MagicMock()
+        self.proto.counter = 10
+        self.proto.transport = MagicMock()
+        self.proto.file_iterator = MagicMock()
+        self.proto.file_iterator.__next__.return_value = b'AAAA'
+
+    def test_get_next_chunk_of_data(self):
+        rsp = self.proto.next_datagram()
+
+        self.assertEqual(rsp.to_bytes(), DAT + b'\x00\x0aAAAA')
+
+    def test_get_sequence_of_chunks(self):
+        ack1 = ACK + b'\x00\x0a'
+        ack2 = ACK + b'\x00\x0b'
+        dat1 = DAT + b'\x00\x0bAAAA'
+        dat2 = DAT + b'\x00\x0cAAAA'
+
+        self.proto.datagram_received(ack1, self.addr)
+        self.proto.datagram_received(ack2, self.addr)
+
+        calls = [call(dat1, self.addr), call(dat2, self.addr)]
+        self.proto.transport.sendto.assert_has_calls(calls)
+
+    def test_send_last_packet(self):
+        self.proto.file_iterator.__next__.side_effect = StopIteration()
+        ack1 = ACK + b'\x00\x0a'
+
+        self.proto.datagram_received(ack1, self.addr)
+
+        self.proto.transport.sendto.assert_called_with(DAT + b'\x00\x0b',
+                                                       self.addr)
+        self.assertTrue(self.proto.transport.close.called)
+
+    def test_bad_packet(self):
+        bad_msg = DAT + b'\x00\x0aAAAA'
+
+        self.proto.datagram_received(bad_msg, self.addr)
+
+        self.assertFalse(self.proto.file_iterator.called)
+        self.assertFalse(self.proto.transport.sendto.called)
+
+    def test_bad_tid(self):
+        # this should get moved to base tests, same for wrq
+        addr = ('127.0.0.1', 8888,)
+        ack1 = ACK + b'\x00\x0a'
+
+        self.proto.datagram_received(ack1, addr)
+
+        err_tid = self.packet_factory.err_unknown_tid()
+
+        self.proto.transport.sendto.assert_called_with(err_tid.to_bytes(),
+                                                       addr)
+
+    def test_bad_packet_sequence_is_ignored(self):
+        ack1 = ACK + b'\x00\x0b'
+
+        self.proto.datagram_received(ack1, self.addr)
 
         self.assertFalse(self.proto.transport.sendto.called)
         self.assertFalse(self.proto.file_iterator.send.called)
