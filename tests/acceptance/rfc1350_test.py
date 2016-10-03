@@ -6,7 +6,7 @@ from os import remove as rm
 from os.path import exists
 from time import sleep
 
-import test_helpers as h
+import tests.test_helpers as h
 
 
 class TestRRQ(unittest.TestCase):
@@ -166,7 +166,7 @@ class TestWRQ(unittest.TestCase):
                           server)
 
         # wait for timeout to close file
-        sleep(3.1)
+        sleep(5.1)
         with open('LICENSE_TEST', 'rb') as f:
             license_test = f.read()
 

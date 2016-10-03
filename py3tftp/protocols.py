@@ -22,15 +22,16 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
     def __init__(self, packet: bytes,
                  remote_addr: Tuple[str, int],
                  extra_opts: Optional[Dict[str, Any]] = None) -> None:
+        self.packet_factory = TFTPPacketFactory(
+            supported_opts=self.supported_opts,
+            default_opts=self.default_opts)
+
         self.remote_addr = remote_addr
-        self.packet = packet
+        self.packet = self.packet_factory.from_bytes(packet)
         self.extra_opts = extra_opts or {}
         self.retransmit = None
         self.file_iterator = None
         self.finished = False
-        self.packet_factory = TFTPPacketFactory(
-            supported_opts=self.supported_opts,
-            default_opts=self.default_opts)
 
     def datagram_received(self,
                           data: bytes,
@@ -72,7 +73,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
             if self.r_opts:
                 self.counter = 0 # type: int
-                pkt = self.packet_factory.create_packet('ock', r_opts=self.r_opts)
+                pkt = self.packet_factory.create_packet('OCK', r_opts=self.r_opts)
             else:
                 pkt = self.next_datagram()
         except FileExistsError:
@@ -378,11 +379,11 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         """
         logging.debug('received: {}'.format(data.decode()))
 
-        packet = self.packet_factory.from_bytes(data)
-        protocol = self.select_protocol(packet)
+        first_packet = self.packet_factory.from_bytes(data)
+        protocol = self.select_protocol(first_packet)
 
         connect = self.loop.create_datagram_endpoint(
-            lambda: protocol(packet, addr, self.extra_opts),
+            lambda: protocol(data, addr, self.extra_opts),
             local_addr=(self.host_interface, 0,))
 
         self.loop.create_task(connect)

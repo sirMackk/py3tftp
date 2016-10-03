@@ -52,14 +52,14 @@ class TestSanitizeFname(t.TestCase):
     def setUpClass(cls):
         from os import getcwd
         from os.path import join as path_join
-        cls.target_dir = path_join(getcwd(), 'tmp/testfile')
+        cls.target_dir = bytes(path_join(getcwd(), 'tmp/testfile'), encoding='ascii')
 
     def test_under_root_dir(self):
-        fname = '/tmp/testfile'
+        fname = b'/tmp/testfile'
         self.assertEqual(sanitize_fname(fname), self.target_dir)
 
     def test_dir_traversal(self):
-        fname = '../../../../../../tmp/testfile'
+        fname = b'../../../../../../tmp/testfile'
         self.assertEqual(sanitize_fname(fname), self.target_dir)
 
 

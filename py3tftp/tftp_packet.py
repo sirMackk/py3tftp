@@ -6,14 +6,8 @@ from py3tftp.exceptions import BadRequest
 
 class TFTPPacketFactory(object):
     def __init__(self, supported_opts=None, default_opts=None):
-        if not supported_opts:
-            supported_opts = {}
-
-        if not default_opts:
-            default_opts = {}
-
-        self.supported_opts = supported_opts
-        self.default_opts = default_opts
+        self.supported_opts = supported_opts or {}
+        self.default_opts = default_opts or {}
 
 
     @classmethod
@@ -37,7 +31,7 @@ class TFTPPacketFactory(object):
 
         if pkt_type in ('RRQ', 'WRQ'):
             fname, mode, r_opts = tftp_parsing.validate_req(
-                *tftp_parsing.parse_req(data),
+                *tftp_parsing.parse_req(data[2:]),
                 supported_opts=self.supported_opts,
                 default_opts=self.default_opts)
             return self.create_packet(
@@ -58,7 +52,7 @@ class TFTPPacketFactory(object):
                 block_no=block_no)
         elif pkt_type == 'OCK':
             _, _, r_opts = tftp_parsing.validate_req(
-                *tftp_parsing.parse_req(data),
+                *tftp_parsing.parse_req(data[2:]),
                 supported_opts=self.supported_opts,
                 default_opts=self.default_opts)
             return self.create_packet(pkt_type=pkt_type, opts=r_opts)
@@ -136,9 +130,16 @@ class BaseTFTPPacket(object):
         return len(self.to_bytes())
 
     @classmethod
+    def _to_bytes(cls, item):
+        if isinstance(item, bytes):
+            return item
+        else:
+            return str(item).encode('ascii')
+
+    @classmethod
     def serialize_options(cls, options):
         opt_items = [val for pair in options.items() for val in pair]
-        opt_items = [str(val).encode('ascii') for val in opt_items]
+        opt_items = [cls._to_bytes(val) for val in opt_items]
         return b'\x00'.join(opt_items)
 
     @classmethod

@@ -1,7 +1,7 @@
 import unittest
 import socket
 
-import test_helpers as h
+import tests.test_helpers as h
 
 
 class TestBlksize(unittest.TestCase):

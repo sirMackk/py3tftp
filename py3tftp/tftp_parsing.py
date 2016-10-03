@@ -30,6 +30,7 @@ def validate_req(fname: bytes,
         default_opts = {}
 
     acknowledged_options = {} # type: Dict[bytes, Any]
+
     for option, value in opts.items():
         logging.debug(option)
         if option in supported_opts.keys():
@@ -67,9 +68,9 @@ def sanitize_fname(fname: bytes) -> bytes:
     """
     root_dir = os.getcwd()
     return opath.join(
-        root_dir,
+        bytes(root_dir, encoding='ascii'),
         opath.normpath(
-            '/' + fname).lstrip('/'))
+            b'/' + fname).lstrip(b'/'))
 
 
 def blksize_parser(val: bytes,

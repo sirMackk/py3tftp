@@ -46,8 +46,7 @@ class TestWRQProtocol(t.TestCase):
 
     def setUp(self):
         self.addr = ('127.0.0.1', 9999,)
-        self.wrq = self.packet_factory.from_bytes(
-            WRQ + b'\x00filename1\x00octet\x00')
+        self.wrq = WRQ + b'\x00filename1\x00octet\x00'
         self.proto = WRQProtocol(self.wrq, self.addr, {})
         self.proto.set_proto_attributes()
         self.proto.h_timeout = MagicMock()
@@ -108,8 +107,7 @@ class TestRRQProtocol(t.TestCase):
 
     def setUp(self):
         self.addr = ('127.0.0.1', 9999,)
-        self.rrq = self.packet_factory.from_bytes(
-            RRQ + b'\x00filename1\x00octet\x00')
+        self.rrq = RRQ + b'\x00filename1\x00octet\x00'
         self.proto = RRQProtocol(self.rrq, self.addr, {})
         self.proto.set_proto_attributes()
         self.proto.h_timeout = MagicMock()

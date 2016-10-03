@@ -102,6 +102,11 @@ class TestBaseTFTPPacket(t.TestCase):
         serialized_opts = BaseTFTPPacket.serialize_options(opts)
         self.assertEqual(b'opt1\x00123', serialized_opts)
 
+    def test_serialize_options_bytes(self):
+        opts = {b'opt1': 123}
+        serialized_opts = BaseTFTPPacket.serialize_options(opts)
+        self.assertEqual(b'opt1\x00123', serialized_opts)
+
     def test_serialize_options_many_opt(self):
         opts = OrderedDict()
         opts['opt1'] = '321'
