@@ -1,5 +1,5 @@
 from py3tftp import tftp_parsing
-from py3tftp.exceptions import BadRequest
+from py3tftp.exceptions import BadRequest, BadPacketType
 
 
 class TFTPPacketFactory(object):
@@ -19,12 +19,14 @@ class TFTPPacketFactory(object):
             return TFTPOckPacket(**kwargs)
         elif pkt_type == 'ERR':
             return TFTPErrPacket(**kwargs)
+        raise BadPacketType('Unknown packet type - "{0}"'.format(pkt_type))
 
     def from_bytes(self, data):
         try:
             pkt_type = BaseTFTPPacket.pkt_types[data[:2]].upper()
         except KeyError:
-            raise BadRequest()
+            raise BadPacketType(
+                'Cannot create packet from raw bytes, unknown packet type.')
 
         if pkt_type in ('RRQ', 'WRQ'):
             fname, mode, r_opts = tftp_parsing.validate_req(

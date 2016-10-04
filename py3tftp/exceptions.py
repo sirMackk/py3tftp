@@ -12,3 +12,7 @@ class UnacknowledgedOption(Py3tftpError):
 
 class BadRequest(Py3tftpError):
     pass
+
+
+class BadPacketType(Py3tftpError):
+    pass

@@ -2,9 +2,10 @@ from collections import OrderedDict
 import unittest as t
 from unittest.mock import patch, MagicMock
 
-from py3tftp.exceptions import BadRequest
+from py3tftp.exceptions import BadRequest, BadPacketType
 from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
-    TFTPErrPacket, TFTPRequestPacket, BaseTFTPPacket, TFTPPacketFactory)
+                                 TFTPErrPacket, TFTPRequestPacket,
+                                 BaseTFTPPacket, TFTPPacketFactory)
 
 
 class TestTFTPPacketService(t.TestCase):
@@ -28,7 +29,7 @@ class TestTFTPPacketService(t.TestCase):
 
     @patch('py3tftp.tftp_packet.TFTPOckPacket')
     def test_create_ock_packet(self, ock_packet):
-        self.packet_factory.create_packet('OCK', r_opts ={'tsize': 512})
+        self.packet_factory.create_packet('OCK', r_opts={'tsize': 512})
         ock_packet.assert_called_once_with(r_opts={'tsize': 512})
 
     @patch('py3tftp.tftp_packet.TFTPErrPacket')
@@ -67,9 +68,13 @@ class TestTFTPPacketService(t.TestCase):
         self.assertTrue(pkt.is_ock())
 
     def test_from_bytes_bad_packet(self):
-        with self.assertRaises(BadRequest):
-            pkt = self.packet_factory.from_bytes(
+        with self.assertRaises(BadPacketType):
+            self.packet_factory.from_bytes(
                 b'\x00\x00\x00blksize\x00512\x00')
+
+    def test_create_packet_bad_packet_type_raises_exc(self):
+        with self.assertRaises(BadPacketType):
+            self.packet_factory.create_packet(pkt_type='WAT')
 
 
 class TestBaseTFTPPacket(t.TestCase):
