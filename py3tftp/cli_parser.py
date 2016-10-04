@@ -1,4 +1,3 @@
-import typing
 import argparse
 import logging
 from sys import exit
@@ -17,11 +16,11 @@ logging_config = {
 }
 
 
-def print_version() -> None:
+def print_version():
     print("py3tftp version: {}".format(__version__))
 
 
-def parse_cli_arguments() -> argparse.Namespace:
+def parse_cli_arguments():
     parser = argparse.ArgumentParser(epilog=EPILOG)
     parser.add_argument('--host',
                         default='0.0.0.0',
@@ -32,10 +31,9 @@ def parse_cli_arguments() -> argparse.Namespace:
         '--port',
         default=9069,
         type=int,
-        help=(
-            'Port the server will listen on. '
-            'Default: 9069. TFTP standard-compliant port: 69 - '
-            'requires superuser privileges.'))
+        help=('Port the server will listen on. '
+              'Default: 9069. TFTP standard-compliant port: 69 - '
+              'requires superuser privileges.'))
     parser.add_argument(
         '--ack-timeout',
         default=0.5,
@@ -46,9 +44,8 @@ def parse_cli_arguments() -> argparse.Namespace:
         dest="timeout",
         default=3.0,
         type=float,
-        help=(
-            'Timeout before the server gives up on a transfer and closes '
-            'the connection. Default: 3.'))
+        help=('Timeout before the server gives up on a transfer and closes '
+              'the connection. Default: 3.'))
     parser.add_argument('-l', '--file-log', help='Append output to log file.')
     parser.add_argument('-v',
                         '--verbose',

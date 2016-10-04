@@ -1,5 +1,3 @@
-from typing import Union
-
 from py3tftp import tftp_parsing
 from py3tftp.exceptions import BadRequest
 
@@ -8,7 +6,6 @@ class TFTPPacketFactory(object):
     def __init__(self, supported_opts=None, default_opts=None):
         self.supported_opts = supported_opts or {}
         self.default_opts = default_opts or {}
-
 
     @classmethod
     def create_packet(cls, pkt_type=None, **kwargs):
@@ -62,19 +59,19 @@ class TFTPPacketFactory(object):
             return self.create_packet(pkt_type, code=code, msg=msg)
 
     @classmethod
-    def err_file_exists(cls) -> bytes:
+    def err_file_exists(cls):
         return cls.create_packet('ERR', code=6, msg='File already exists')
 
     @classmethod
-    def err_access_violation(cls) -> bytes:
+    def err_access_violation(cls):
         return cls.create_packet('ERR', code=2, msg='Access violation')
 
     @classmethod
-    def err_file_not_found(cls) -> bytes:
+    def err_file_not_found(cls):
         return cls.create_packet('ERR', code=1, msg='File not found')
 
     @classmethod
-    def err_unknown_tid(cls) -> bytes:
+    def err_unknown_tid(cls):
         return cls.create_packet('ERR', code=5, msg='Unknown transfer id')
 
 
@@ -101,28 +98,28 @@ class BaseTFTPPacket(object):
     def to_bytes(self):
         raise NotImplementedError
 
-    def is_ack(self) -> bool:
+    def is_ack(self):
         return self.pkt_type == 'ACK'
 
-    def is_correct_sequence(self, expected_block_no: int) -> bool:
+    def is_correct_sequence(self, expected_block_no):
         """
         Checks whether incoming data packet has the expected block number.
         """
         return expected_block_no == self.block_no
 
-    def is_data(self) -> bool:
+    def is_data(self):
         return self.pkt_type == 'DAT'
 
-    def is_err(self)-> bool:
+    def is_err(self):
         return self.pkt_type == 'ERR'
 
-    def is_rrq(self) -> bool:
+    def is_rrq(self):
         return self.pkt_type == 'RRQ'
 
-    def is_wrq(self) -> bool:
+    def is_wrq(self):
         return self.pkt_type == 'WRQ'
 
-    def is_ock(self) -> bool:
+    def is_ock(self):
         return self.pkt_type == 'OCK'
 
     @property
@@ -143,21 +140,21 @@ class BaseTFTPPacket(object):
         return b'\x00'.join(opt_items)
 
     @classmethod
-    def number_to_bytes(cls, val: Union[int, float]) -> bytes:
+    def number_to_bytes(cls, val):
         """
         Changes a number to an ascii byte string.
         """
         return bytes(str(int(val)), encoding='ascii')
 
     @classmethod
-    def pack_short(cls, number: int) -> bytes:
+    def pack_short(cls, number):
         """
         Create big-endian short byte string out of integer.
         """
         return number.to_bytes(2, byteorder='big')
 
     @classmethod
-    def unpack_short(cls, data: bytes) -> int:
+    def unpack_short(cls, data):
         """
         Create integer out of big-endian short byte string.
         """

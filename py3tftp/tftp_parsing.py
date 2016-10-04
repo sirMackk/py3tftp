@@ -1,7 +1,5 @@
 import os
 import os.path as opath
-import typing
-from typing import Tuple, Dict, Any, Optional
 import logging
 
 from .exceptions import UnacknowledgedOption, BadRequest
@@ -13,13 +11,7 @@ as well as parse filenames.
 """
 
 
-def validate_req(fname: bytes,
-                 mode: bytes,
-                 opts: Dict[bytes, Any],
-                 supported_opts: Optional[Dict[str, Any]] = None,
-                 default_opts: Optional[Dict[str, Any]] = None) -> Tuple[bytes,
-                                                  bytes,
-                                                  Dict[bytes, Any]]:
+def validate_req(fname, mode, opts, supported_opts=None, default_opts=None):
     """
     Validates an RRQ or WRQ.
     Currently only validates the optional "opts" parameter.
@@ -29,7 +21,7 @@ def validate_req(fname: bytes,
     if not default_opts:
         default_opts = {}
 
-    acknowledged_options = {} # type: Dict[bytes, Any]
+    acknowledged_options = {}
 
     for option, value in opts.items():
         logging.debug(option)
@@ -46,9 +38,8 @@ def validate_req(fname: bytes,
 
     return (fname.decode(encoding='ascii'), mode, acknowledged_options)
 
-def parse_req(req: bytes) -> Tuple[bytes,
-                                   bytes,
-                                   Dict[bytes, Any]]:
+
+def parse_req(req):
     """
     Seperates \x00 delimited byte string contents according to RFC2347:
     'filename\x00mode\x00opt1\x00val1\x00optN\x00valN\x00' into a
@@ -62,7 +53,8 @@ def parse_req(req: bytes) -> Tuple[bytes,
     options = dict(zip(opts[::2], opts[1::2]))
     return fname, mode, options
 
-def sanitize_fname(fname: bytes) -> bytes:
+
+def sanitize_fname(fname):
     """
     Ensures that fname is a path under the current working directory.
     """
@@ -73,9 +65,7 @@ def sanitize_fname(fname: bytes) -> bytes:
             b'/' + fname).lstrip(b'/'))
 
 
-def blksize_parser(val: bytes,
-                   lower_bound: int = 8,
-                   upper_bound: int = 65464) -> int:
+def blksize_parser(val, lower_bound=8, upper_bound=65464):
     """
     Parses and validates the 'blksize' option against the RFC 2348.
     """
@@ -90,9 +80,7 @@ def blksize_parser(val: bytes,
         return value
 
 
-def timeout_parser(val: bytes,
-                   lower_bound: int = 1,
-                   upper_bound: int = 255) -> float:
+def timeout_parser(val, lower_bound=1, upper_bound=255):
     """
     Parses and validates the 'timeout' option against RFC 2349.
     """
