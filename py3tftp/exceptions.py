@@ -16,3 +16,7 @@ class BadRequest(Py3tftpError):
 
 class BadPacketType(Py3tftpError):
     pass
+
+
+class FileDoesntExist(Py3tftpError):
+    pass

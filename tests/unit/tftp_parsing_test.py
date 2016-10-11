@@ -2,7 +2,7 @@ import unittest as t
 
 from py3tftp.exceptions import UnacknowledgedOption, BadRequest
 from py3tftp.tftp_parsing import (
-    validate_req, parse_req, sanitize_fname, blksize_parser,
+    validate_req, parse_req, blksize_parser,
     timeout_parser)
 
 
@@ -45,22 +45,6 @@ class TestBlksizeParser(t.TestCase):
         val = b'\x41'
         with self.assertRaises(ValueError):
             blksize_parser(val)
-
-
-class TestSanitizeFname(t.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        from os import getcwd
-        from os.path import join as path_join
-        cls.target_dir = bytes(path_join(getcwd(), 'tmp/testfile'), encoding='ascii')
-
-    def test_under_root_dir(self):
-        fname = b'/tmp/testfile'
-        self.assertEqual(sanitize_fname(fname), self.target_dir)
-
-    def test_dir_traversal(self):
-        fname = b'../../../../../../tmp/testfile'
-        self.assertEqual(sanitize_fname(fname), self.target_dir)
 
 
 class TestParseReq(t.TestCase):

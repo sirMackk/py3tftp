@@ -54,17 +54,6 @@ def parse_req(req):
     return fname, mode, options
 
 
-def sanitize_fname(fname):
-    """
-    Ensures that fname is a path under the current working directory.
-    """
-    root_dir = os.getcwd()
-    return opath.join(
-        bytes(root_dir, encoding='ascii'),
-        opath.normpath(
-            b'/' + fname).lstrip(b'/'))
-
-
 def blksize_parser(val, lower_bound=8, upper_bound=65464):
     """
     Parses and validates the 'blksize' option against the RFC 2348.

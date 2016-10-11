@@ -5,3 +5,6 @@ python:
 install: pip install coverage==4.1
 
 script: ./.travis/run.sh
+
+notifications:
+  email: false

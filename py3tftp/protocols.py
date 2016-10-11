@@ -3,6 +3,7 @@ import asyncio
 
 from .exceptions import ProtocolException
 from py3tftp import tftp_parsing
+from py3tftp import file_io
 from py3tftp.tftp_packet import TFTPPacketFactory
 
 
@@ -254,7 +255,7 @@ class WRQProtocol(BaseTFTPProtocol):
         """
         Returns an iterator function to write a file in blksize blocks.
         """
-        fpath = tftp_parsing.sanitize_fname(fname)
+        fpath = file_io.sanitize_fname(fname)
 
         def iterator():
             with open(fpath, 'xb') as f:
@@ -320,7 +321,7 @@ class RRQProtocol(BaseTFTPProtocol):
         """
         Returns an iterator of a file, read in blksize chunks.
         """
-        fpath = tftp_parsing.sanitize_fname(fname)
+        fpath = file_io.sanitize_fname(fname)
 
         def iterator():
             with open(fpath, 'rb') as f:
