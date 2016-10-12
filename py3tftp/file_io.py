@@ -18,10 +18,10 @@ def sanitize_fname(fname):
 class FileReader(object):
     def __init__(self, fname):
         self.fname = sanitize_fname(fname)
-        self._f = None
+        self._f_gen = None
         self.finished = False
 
-    def _get_file(self):
+    def _get_file_gen(self):
         try:
             with open(self.fname, 'rb') as f:
                 while True:
@@ -29,12 +29,42 @@ class FileReader(object):
         except FileNotFoundError:
             raise FileDoesntExist('Cannot open {0}'.format(self.fname))
 
-    def next_chunk(self, size=0):
-        if not self._f:
-            self._f = self._get_file()
-        data = next(self._f).read(size)
+    def read_chunk(self, size=0):
+        if not self._f_gen:
+            self._f_gen = self._get_file_gen()
+        data = next(self._f_gen).read(size)
 
         if not data:
             self.finished = True
 
         return data
+
+
+class FileWriter(object):
+    def __init__(self, fname, chunk_size):
+        self.fname = fname
+        self.chunk_size = chunk_size
+        self._f_gen = None
+        self._f = None
+
+    def _get_file_gen(self):
+        with open(self.fname, 'xb') as f:
+            self._f = f
+            while True:
+                data = yield
+                f.write(data)
+                if len(data) < self.chunk_size:
+                    self._f = None
+                    break
+        yield None
+
+    def _flush(self):
+        if self._f_gen:
+            self._f_gen.send(b'')
+
+    def write_chunk(self, data):
+        if not self._f_gen:
+            self._f_gen = self._get_file_gen()
+            self._f_gen.send(None)
+        self._f_gen.send(data)
+        return len(data)

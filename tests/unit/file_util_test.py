@@ -1,8 +1,9 @@
 import unittest as t
 from unittest.mock import MagicMock, patch
 from io import BytesIO
+import os
 
-from py3tftp.file_io import sanitize_fname, FileReader
+from py3tftp.file_io import sanitize_fname, FileReader, FileWriter
 from py3tftp.exceptions import FileDoesntExist
 
 
@@ -12,14 +13,14 @@ class FileReaderTest(t.TestCase):
         self.reader = FileReader(self.filename)
 
     def test_reads_file(self):
-        chunk = self.reader.next_chunk(2048)
+        chunk = self.reader.read_chunk(2048)
 
         with open(self.filename, 'rb') as f:
             self.assertEqual(f.read(), chunk)
 
     def test_reads_n_bytes(self):
         bytes_to_read = 12
-        chunk = self.reader.next_chunk(bytes_to_read)
+        chunk = self.reader.read_chunk(bytes_to_read)
 
         with open(self.filename, 'rb') as f:
             self.assertEqual(f.read(bytes_to_read), chunk)
@@ -28,7 +29,7 @@ class FileReaderTest(t.TestCase):
         bytes_to_read = 4
         data = BytesIO()
         while not self.reader.finished:
-            data.write(self.reader.next_chunk(bytes_to_read))
+            data.write(self.reader.read_chunk(bytes_to_read))
 
         with open(self.filename, 'rb') as f:
             self.assertEqual(f.read(), data.getvalue())
@@ -38,7 +39,47 @@ class FileReaderTest(t.TestCase):
     def test_raises_doesnt_exist_exc(self):
         with self.assertRaises(FileDoesntExist):
             reader = FileReader(b'DOESNT_EXIST')
-            reader.next_chunk()
+            reader.read_chunk()
+
+
+class FileWriterTest(t.TestCase):
+    def setUp(self):
+        self.filename = b'TEST_FILE'
+        self.msg = b'test msg'
+        self.chk_size = len(self.msg)
+        self.writer = FileWriter(self.filename, self.chk_size)
+
+    def tearDown(self):
+        if os.path.exists(self.filename):
+            os.unlink(self.filename)
+
+    def test_writes_full_file_to_disk(self):
+        self.writer.write_chunk(self.msg)
+
+        self.assertTrue(os.path.exists(self.filename))
+
+        self.writer._flush()
+        with open(self.filename, 'rb') as f:
+            self.assertEqual(self.msg, f.read())
+
+    def test_write_chunk_returns_no_bytes_written(self):
+        bytes_written = self.writer.write_chunk(self.msg)
+        self.assertEqual(len(self.msg), bytes_written)
+
+    def test_doesnt_overwrite_file_raises_exc(self):
+        self.writer.write_chunk(self.msg)
+        with self.assertRaises(FileExistsError):
+            writer2 = FileWriter(self.filename, len(self.msg))
+            writer2.write_chunk(self.msg)
+
+    def test_fd_closed_after_everything_written_out(self):
+        self.writer.write_chunk(self.msg)
+
+        fd = self.writer._f.fileno()
+        self.writer._flush()
+
+        with self.assertRaises(OSError):
+            os.fstat(fd)
 
 
 class TestSanitizeFname(t.TestCase):
