@@ -41,6 +41,14 @@ class FileReaderTest(t.TestCase):
             reader = FileReader(b'DOESNT_EXIST')
             reader.read_chunk()
 
+    def test_fd_closed_after_reading(self):
+        self.reader._get_file()
+        fd = self.reader._f.fileno()
+        self.reader.read_chunk(2048)
+
+        with self.assertRaises(OSError):
+            print(os.fstat(fd))
+
 
 class FileWriterTest(t.TestCase):
     def setUp(self):
@@ -77,6 +85,9 @@ class FileWriterTest(t.TestCase):
 
         fd = self.writer._f.fileno()
         self.writer._flush()
+
+        # simulate the writer obj going out of scope
+        del self.writer
 
         with self.assertRaises(OSError):
             os.fstat(fd)
