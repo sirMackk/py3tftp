@@ -1,8 +1,6 @@
 import os
 import os.path as opath
 
-from py3tftp.exceptions import FileDoesntExist
-
 
 def sanitize_fname(fname):
     """
@@ -16,25 +14,30 @@ def sanitize_fname(fname):
 
 
 class FileReader(object):
-    def __init__(self, fname):
+    """
+    A wrapper around a regular file that implements:
+    - read_chunk - for closing the file when bytes read is
+      less than chunk_size.
+    - finished - for easier notifications
+    interfaces.
+    When it goes out of scope, it ensures the file is closed.
+    """
+
+    def __init__(self, fname, chunk_size=0):
         self.fname = sanitize_fname(fname)
-        self._f_gen = None
+        self.chunk_size = chunk_size
         self._f = None
+        self._f = self._open_file()
         self.finished = False
 
-    def _get_file(self):
-        try:
-            self._f = open(self.fname, 'rb')
-            return self._f
-        except FileNotFoundError:
-            raise FileDoesntExist('Cannot open {0}'.format(self.fname))
+    def _open_file(self):
+        return open(self.fname, 'rb')
 
-    def read_chunk(self, size=0):
+    def read_chunk(self, size=None):
+        size = size or self.chunk_size
         if self.finished:
             return b''
 
-        if not self._f:
-            self._get_file()
         data = self._f.read(size)
 
         if not data or (size > 0 and len(data) < size):
@@ -49,32 +52,26 @@ class FileReader(object):
 
 
 class FileWriter(object):
+    """
+    Wrapper around a regular file that implements:
+    - write_chunk - for closing the file when bytes written
+      is less than chunk_size.
+    When it goes out of scope, it ensures the file is closed.
+    """
     def __init__(self, fname, chunk_size):
         self.fname = fname
         self.chunk_size = chunk_size
         self._f = None
+        self._f = self._open_file()
 
-    def _get_file(self):
-        self._f = open(self.fname, 'xb')
-
-        # with open(self.fname, 'xb') as f:
-            # self._f = f
-            # while True:
-                # data = yield
-                # f.write(data)
-                # if len(data) < self.chunk_size:
-                    # self._f = None
-                    # break
-        # yield None
+    def _open_file(self):
+        return open(self.fname, 'xb')
 
     def _flush(self):
         if self._f:
             self._f.flush()
 
     def write_chunk(self, data):
-        if not self._f:
-            self._get_file()
-
         bytes_written = self._f.write(data)
 
         if not data or len(data) < self.chunk_size:

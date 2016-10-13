@@ -37,12 +37,11 @@ class FileReaderTest(t.TestCase):
         self.assertTrue(self.reader.finished)
 
     def test_raises_doesnt_exist_exc(self):
-        with self.assertRaises(FileDoesntExist):
+        with self.assertRaises(FileNotFoundError):
             reader = FileReader(b'DOESNT_EXIST')
             reader.read_chunk()
 
     def test_fd_closed_after_reading(self):
-        self.reader._get_file()
         fd = self.reader._f.fileno()
         self.reader.read_chunk(2048)
 

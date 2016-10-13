@@ -15,7 +15,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
     default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512}
 
-    def __init__(self, packet, remote_addr, extra_opts=None):
+    def __init__(self, packet, file_handler_cls, remote_addr, extra_opts=None):
         self.packet_factory = TFTPPacketFactory(
             supported_opts=self.supported_opts,
             default_opts=self.default_opts)
@@ -23,8 +23,9 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.remote_addr = remote_addr
         self.packet = self.packet_factory.from_bytes(packet)
         self.extra_opts = extra_opts or {}
+        self.file_handler_cls = file_handler_cls
         self.retransmit = None
-        self.file_iterator = None
+        self.file_handler = None
         self.finished = False
 
     def datagram_received(self, data, addr):
@@ -105,8 +106,6 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         if connection interrupted.
         """
         self.conn_reset()
-        if self.file_iterator:
-            self.file_iterator.close()
         if exc:
             logging.error(
                 'Error on connection lost: {0}.\nTraceback: {1}'.format(
@@ -209,8 +208,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
 
 class WRQProtocol(BaseTFTPProtocol):
-    def __init__(self, wrq, addr, opts):
-        super().__init__(wrq, addr, opts)
+    def __init__(self, wrq, file_handler_cls, addr, opts):
+        super().__init__(wrq, file_handler_cls, addr, opts)
         logging.info('Initiating WRQProtocol with {0}'.format(
             self.remote_addr))
 
@@ -223,7 +222,8 @@ class WRQProtocol(BaseTFTPProtocol):
 
     def initialize_transfer(self):
         self.counter = 0
-        self.file_iterator = self.get_file_writer(self.filename)
+        self.file_handler = self.file_handler_cls(self.filename,
+                                                  self.opts[b'blksize'])
 
     def datagram_received(self, data, addr):
         """
@@ -240,9 +240,9 @@ class WRQProtocol(BaseTFTPProtocol):
             reply_packet = self.next_datagram()
             self.reply_to_client(reply_packet.to_bytes())
 
-            try:
-                self.file_iterator.send(packet.data)
-            except StopIteration:
+            self.file_handler.write_chunk(packet.data)
+
+            if packet.size < self.opts[b'blksize']:
                 logging.info('Receiving file "{0}" from {1} completed'.format(
                     self.filename, self.remote_addr))
                 self.retransmit_reset()
@@ -251,39 +251,21 @@ class WRQProtocol(BaseTFTPProtocol):
             logging.debug('Data: {0}; is_data: {1}; counter: {2}'.format(
                 data, packet.is_data(), self.counter))
 
-    def get_file_writer(self, fname):
-        """
-        Returns an iterator function to write a file in blksize blocks.
-        """
-        fpath = file_io.sanitize_fname(fname)
-
-        def iterator():
-            with open(fpath, 'xb') as f:
-                while True:
-                    data = yield
-                    f.write(data)
-                    if len(data) < self.opts[b'blksize']:
-                        raise StopIteration
-
-        writer = iterator()
-        writer.send(None)
-        return writer
-
 
 class RRQProtocol(BaseTFTPProtocol):
-    def __init__(self, rrq, addr, opts):
-        super().__init__(rrq, addr, opts)
+    def __init__(self, rrq, file_handler_cls, addr, opts):
+        super().__init__(rrq, file_handler_cls, addr, opts)
         logging.info('Initiating RRQProtocol with {0}'.format(
             self.remote_addr))
 
     def next_datagram(self):
         return self.packet_factory.create_packet(pkt_type='DAT',
                                                  block_no=self.counter,
-                                                 data=next(self.file_iterator))
+                                                 data=self.file_handler.read_chunk())
 
     def initialize_transfer(self):
         self.counter = 1
-        self.file_iterator = self.get_file_reader(self.filename)
+        self.file_handler = self.file_handler_cls(self.filename, self.opts[b'blksize'])
 
     def datagram_received(self, data, addr):
         """
@@ -295,40 +277,14 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
-            try:
-                self.counter += 1
-                packet = self.next_datagram()
-                self.reply_to_client(packet.to_bytes())
-                if packet.size < self.opts[b'blksize']:
-                    self.finished = True
-            except StopIteration:
-                logging.info('Sending file "{0}" to {1} completed'.format(
-                    self.filename, self.remote_addr))
-                # case where iterator reads and returns b''
-                if not self.finished:
-                    # move this out - wrong level of abstraction
-                    last_dat = self.packet_factory.create_packet(
-                        pkt_type='DAT',
-                        block_no=self.counter,
-                        data=b'')
-                    self.reply_to_client(last_dat.to_bytes())
+            self.counter += 1
+            packet = self.next_datagram()
+            self.reply_to_client(packet.to_bytes())
+            if self.file_handler.finished:
                 self.transport.close()
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
-
-    def get_file_reader(self, fname):
-        """
-        Returns an iterator of a file, read in blksize chunks.
-        """
-        fpath = file_io.sanitize_fname(fname)
-
-        def iterator():
-            with open(fpath, 'rb') as f:
-                for chunk in iter(lambda: f.read(self.opts[b'blksize']), b''):
-                    yield chunk
-
-        return iterator()
 
 
 class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
@@ -346,6 +302,13 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         """
         raise NotImplementedError
 
+    def select_file_handler(self, first_packet):
+        """
+        Selects a class that implements the correct interface
+        to handle the input/output for a tftp transfer.
+        """
+        raise NotImplementedError
+
     def connection_made(self, transport):
         logging.info('Listening...')
         self.transport = transport
@@ -359,9 +322,10 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
 
         first_packet = self.packet_factory.from_bytes(data)
         protocol = self.select_protocol(first_packet)
+        file_handler_cls = self.select_file_handler(first_packet)
 
         connect = self.loop.create_datagram_endpoint(
-            lambda: protocol(data, addr, self.extra_opts),
+            lambda: protocol(data, file_handler_cls, addr, self.extra_opts),
             local_addr=(self.host_interface,
                         0, ))
 
@@ -380,3 +344,9 @@ class TFTPServerProtocol(BaseTFTPServerProtocol):
             return WRQProtocol
         else:
             raise ProtocolException('Received incompatible request, ignoring.')
+
+    def select_file_handler(self, packet):
+        if packet.is_wrq():
+            return file_io.FileWriter
+        else:
+            return file_io.FileReader
