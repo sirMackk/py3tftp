@@ -1,5 +1,12 @@
 # CHANGELOG
 
+### 0.0.6 (October x, 2016)
+
+- Removes type hints.
+- Restructures project into more layers (ie. special packet objects, pulls out file IO from protocols), big API changes.
+- Adds a suite of unit tests.
+- Adds Travis-CI configuration files.
+
 ### 0.0.5 (March 21st, 2016)
 
 - Fixes off by one server response to RRQs that are the multiple of the file's size.

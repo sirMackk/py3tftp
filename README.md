@@ -23,7 +23,8 @@ Invoking pyt3tftp will start a server that will interact with the current workin
 
 TFTP has no security features, except for its simplicity:
 - It won't overwrite files.
-- Nor create non-existant directories.
+- Won't create non-existant directories.
+- Cannot write outside of the directory it's running from.
 
 ```
 usage: py3tftp [-h] [--host HOST] [-p PORT] [--ack-timeout ACK_TIMEOUT]
@@ -54,7 +55,7 @@ I wrote some simple acceptance tests in `tests/acceptance/*_test.py`. The code i
 # runs the server with python -m py3tftp
 # runs unittests under tests/
 # kills the server
-./test.sh
+./.travis/run.sh
 ```
 
 #### Extending py3tftp
@@ -76,7 +77,7 @@ Extending py3tftp is as easy as:
 #### Roadplan
 
 - ~~fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.~~
-- Pull out file reader/writer from protocol classes.
+- ~~Pull out file reader/writer from protocol classes~~.
 - Add tsize from RFC 2349.
 - Add ~~blksize~~, ~~timeout~~, and tsize tests.
 - Possibly implement RFCs 906 and 951 for fun!

@@ -1,10 +1,8 @@
 import unittest as t
-from unittest.mock import MagicMock, patch
 from io import BytesIO
 import os
 
 from py3tftp.file_io import sanitize_fname, FileReader, FileWriter
-from py3tftp.exceptions import FileDoesntExist
 
 
 class FileReaderTest(t.TestCase):
