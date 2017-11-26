@@ -1,6 +1,6 @@
 # Py3tftp
 
-Py3tftp is an asynchronous [TFTP][1] server written in Python 3.5. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ and _netascii_ modes), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), and part of [RFC 2349][5] (timeout, no tsize).
+Py3tftp is an asynchronous [TFTP][1] server written in Python 3.5. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ and _netascii_ modes), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), and part of [RFC 2349][5] (timeout, no tsize). Additionally, it supports block number roll over, so files of any size can be transferred over.
 
 While a toy project, it does adhere to enough of the standards to be useful in real life.
 

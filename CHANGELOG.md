@@ -1,6 +1,11 @@
 # CHANGELOG
 
-### 0.0.6 (October x, 2016)
+### 1.0.0a (November 26, 2017)
+
+- Fixes issue #1 - implements block number roll over so files over 65535 blocks can be uploaded or downloaded.
+- Version bump to 1.0.0a due to fouled up pypi upload.
+
+### 0.0.6 (October 17th, 2016)
 
 - Removes type hints.
 - Restructures project into more layers (ie. special packet objects, pulls out file IO from protocols), big API changes.

@@ -98,6 +98,19 @@ class TestWRQProtocol(t.TestCase):
         self.assertFalse(self.proto.transport.sendto.called)
 
 
+    def test_roll_over(self):
+        self.proto.counter = 65535
+        dat1 = DAT + b'\xff\xffAAAA'
+        dat2 = DAT + b'\x00\x00AAAA'
+
+        self.proto.datagram_received(dat1, self.addr)
+        self.assertEqual(self.proto.counter, 65535)
+        self.proto.datagram_received(dat2, self.addr)
+        self.assertEqual(self.proto.counter, 0)
+        self.proto.transport.sendto.assert_called_with(ACK + b'\x00\x00',
+                                                       self.addr)
+
+
 class TestRRQProtocol(t.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -167,4 +180,17 @@ class TestRRQProtocol(t.TestCase):
         self.proto.datagram_received(ack1, self.addr)
 
         self.assertFalse(self.proto.transport.sendto.called)
-        self.assertFalse(self.proto.file_iterator.send.called)
+        self.assertFalse(self.proto.file_handler.send.called)
+
+    def test_roll_over(self):
+        self.proto.counter = (2 ** 16) - 1
+        ack1 = ACK + b'\xff\xff'
+        ack2 = ACK + b'\x00\x00'
+        dat1 = DAT + b'\x00\x00AAAA'
+        dat2 = DAT + b'\x00\x01AAAA'
+
+        self.proto.datagram_received(ack1, self.addr)
+        self.proto.datagram_received(ack2, self.addr)
+
+        calls = [call(dat1, self.addr), call(dat2, self.addr)]
+        self.proto.transport.sendto.assert_has_calls(calls)

@@ -233,10 +233,10 @@ class WRQProtocol(BaseTFTPProtocol):
         packet = self.packet_factory.from_bytes(data)
 
         if (self.is_correct_tid(addr) and packet.is_data() and
-                packet.is_correct_sequence(self.counter + 1)):
+                packet.is_correct_sequence((self.counter + 1) % 65536)):
             self.conn_timeout_reset()
 
-            self.counter += 1
+            self.counter = (self.counter + 1) % 65536
             reply_packet = self.next_datagram()
             self.reply_to_client(reply_packet.to_bytes())
 
@@ -277,7 +277,7 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
-            self.counter += 1
+            self.counter = (self.counter + 1) % 65536
             packet = self.next_datagram()
             self.reply_to_client(packet.to_bytes())
             if self.file_handler.finished:
