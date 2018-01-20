@@ -60,6 +60,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         access the requested file - and handles possible file errors - as well
         as handling option negotiation (if applicable).
         """
+        logging.debug('Initializing file transfer to {addr}'.format(
+            addr=self.remote_addr))
         try:
             self.set_proto_attributes()
             self.initialize_transfer()
@@ -96,9 +98,9 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         self.filename = self.packet.fname
         self.r_opts = self.packet.r_opts
-        logging.debug(self.r_opts)
         self.opts = {**self.default_opts, **self.extra_opts, **self.r_opts}
-        logging.debug(self.opts)
+        logging.debug(
+            'Set protocol attributes as {attrs}'.format(attrs=self.opts))
 
     def connection_lost(self, exc):
         """
