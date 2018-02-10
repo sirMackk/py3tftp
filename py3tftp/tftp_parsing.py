@@ -1,8 +1,6 @@
-import os
-import os.path as opath
 import logging
 
-from .exceptions import UnacknowledgedOption, BadRequest
+from py3tftp.exceptions import BadRequest, UnacknowledgedOption
 
 
 """

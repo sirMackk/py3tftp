@@ -1,8 +1,8 @@
+import os
 import unittest as t
 from io import BytesIO
-import os
 
-from py3tftp.file_io import sanitize_fname, FileReader, FileWriter
+from py3tftp.file_io import FileReader, FileWriter, sanitize_fname
 
 
 class FileReaderTest(t.TestCase):

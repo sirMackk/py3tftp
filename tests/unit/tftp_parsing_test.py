@@ -1,9 +1,8 @@
 import unittest as t
 
-from py3tftp.exceptions import UnacknowledgedOption, BadRequest
-from py3tftp.tftp_parsing import (
-    validate_req, parse_req, blksize_parser,
-    timeout_parser)
+from py3tftp.exceptions import BadRequest, UnacknowledgedOption
+from py3tftp.tftp_parsing import (blksize_parser, parse_req, timeout_parser,
+                                  validate_req)
 
 
 class TestTimeoutParser(t.TestCase):

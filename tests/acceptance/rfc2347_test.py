@@ -1,5 +1,5 @@
-import unittest
 import socket
+import unittest
 
 import tests.test_helpers as h
 

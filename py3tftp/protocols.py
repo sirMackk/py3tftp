@@ -1,9 +1,9 @@
-import logging
 import asyncio
+import logging
 
-from .exceptions import ProtocolException
-from py3tftp import tftp_parsing
 from py3tftp import file_io
+from py3tftp import tftp_parsing
+from py3tftp.exceptions import ProtocolException
 from py3tftp.tftp_packet import TFTPPacketFactory
 
 
@@ -261,13 +261,15 @@ class RRQProtocol(BaseTFTPProtocol):
             self.remote_addr))
 
     def next_datagram(self):
-        return self.packet_factory.create_packet(pkt_type='DAT',
-                                                 block_no=self.counter,
-                                                 data=self.file_handler.read_chunk())
+        return self.packet_factory.create_packet(
+            pkt_type='DAT',
+            block_no=self.counter,
+            data=self.file_handler.read_chunk())
 
     def initialize_transfer(self):
         self.counter = 1
-        self.file_handler = self.file_handler_cls(self.filename, self.opts[b'blksize'])
+        self.file_handler = self.file_handler_cls(self.filename,
+                                                  self.opts[b'blksize'])
 
     def datagram_received(self, data, addr):
         """

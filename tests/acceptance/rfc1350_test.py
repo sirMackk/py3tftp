@@ -1,6 +1,6 @@
-import unittest
-import socket
 import hashlib
+import socket
+import unittest
 from io import BytesIO
 from os import remove as rm
 from os.path import exists
@@ -114,8 +114,7 @@ class TestWRQ(unittest.TestCase):
         for i, chunk in enumerate(self.license):
             ack, server = self.s.recvfrom(1024)
             self.assertEqual(ack, h.ACK + i.to_bytes(2, byteorder='big'))
-            self.s.sendto(h.DAT + (i + 1).to_bytes(2,
-                                                 byteorder='big') + chunk,
+            self.s.sendto(h.DAT + (i + 1).to_bytes(2, byteorder='big') + chunk,
                           server)
 
         sleep(1)
@@ -128,6 +127,7 @@ class TestWRQ(unittest.TestCase):
 
     def test_lost_data_packet(self):
         last_pkt = None
+        pkt = None
         counter = 0
         outbound_data = self.license
         while True:
@@ -161,8 +161,7 @@ class TestWRQ(unittest.TestCase):
             ack, server = self.s.recvfrom(1024)
             if i >= PKTS_BEFORE_DISCONNECT:
                 break
-            self.s.sendto(h.DAT + (i + 1).to_bytes(2,
-                                                 byteorder='big') + chunk,
+            self.s.sendto(h.DAT + (i + 1).to_bytes(2, byteorder='big') + chunk,
                           server)
 
         # wait for timeout to close file
@@ -219,8 +218,8 @@ class TestTFTPErrors(unittest.TestCase):
 
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
-            s.sendto(h.DAT + (1).to_bytes(2,
-                                        byteorder='big') + b'\x41\x41\x41',
+            s.sendto(h.DAT +
+                     (1).to_bytes(2, byteorder='big') + b'\x41\x41\x41',
                      server)
             err, server = s.recvfrom(32)
         finally:

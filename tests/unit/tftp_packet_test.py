@@ -1,11 +1,11 @@
-from collections import OrderedDict
 import unittest as t
-from unittest.mock import patch, MagicMock
+from collections import OrderedDict
+from unittest.mock import patch
 
-from py3tftp.exceptions import BadRequest, BadPacketType
-from py3tftp.tftp_packet import (TFTPDatPacket, TFTPAckPacket, TFTPOckPacket,
-                                 TFTPErrPacket, TFTPRequestPacket,
-                                 BaseTFTPPacket, TFTPPacketFactory)
+from py3tftp.exceptions import BadPacketType
+from py3tftp.tftp_packet import (BaseTFTPPacket, TFTPAckPacket, TFTPDatPacket,
+                                 TFTPErrPacket, TFTPOckPacket,
+                                 TFTPPacketFactory, TFTPRequestPacket)
 
 
 class TestTFTPPacketService(t.TestCase):

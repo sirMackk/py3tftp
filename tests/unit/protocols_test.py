@@ -1,12 +1,10 @@
 import unittest as t
 from unittest.mock import MagicMock, call
 
-from py3tftp.protocols import (
-    TFTPServerProtocol, RRQProtocol, WRQProtocol)
+from py3tftp.protocols import (RRQProtocol, TFTPServerProtocol, WRQProtocol)
 from py3tftp.tftp_packet import TFTPPacketFactory
-from py3tftp.file_io import FileReader, FileWriter
 
-from tests.test_helpers import (RRQ, WRQ, DAT, ACK)
+from tests.test_helpers import (ACK, DAT, RRQ, WRQ)
 
 
 class TestTFTPServerProtocol(t.TestCase):
@@ -96,7 +94,6 @@ class TestWRQProtocol(t.TestCase):
         self.proto.datagram_received(data, self.addr)
 
         self.assertFalse(self.proto.transport.sendto.called)
-
 
     def test_roll_over(self):
         self.proto.counter = 65535
