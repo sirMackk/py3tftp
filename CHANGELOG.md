@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.0.1 (February 10, 2018)
+
+- Fixes issue #3 - --ack-timeout and --conn-timeout actually work now.
+
 ### 1.0.0a (November 26, 2017)
 
 - Fixes issue #1 - implements block number roll over so files over 65535 blocks can be uploaded or downloaded.
