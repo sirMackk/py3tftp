@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.0.2 (March 05, 2018)
+
+- Fixes KeyError bug with the `-l` CLI option (thanks pritstift!)
+
 ### 1.0.1 (February 10, 2018)
 
 - Fixes issue #3 - --ack-timeout and --conn-timeout actually work now.
