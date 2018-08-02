@@ -24,7 +24,7 @@ class FileReader(object):
     When it goes out of scope, it ensures the file is closed.
     """
 
-    def __init__(self, fname, chunk_size, mode):
+    def __init__(self, fname, chunk_size=0, mode=None):
         self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
         self._f = None
@@ -62,7 +62,7 @@ class FileWriter(object):
       is less than chunk_size.
     When it goes out of scope, it ensures the file is closed.
     """
-    def __init__(self, fname, chunk_size, mode):
+    def __init__(self, fname, chunk_size, mode=None):
         self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
         self._f = None
