@@ -281,11 +281,12 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
+            if self.file_handler.finished:
+                self.transport.close()
+                return
             self.counter = (self.counter + 1) % 65536
             packet = self.next_datagram()
             self.reply_to_client(packet.to_bytes())
-            if self.file_handler.finished:
-                self.transport.close()
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))

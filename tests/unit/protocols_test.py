@@ -130,6 +130,7 @@ class TestRRQProtocol(t.TestCase):
         self.assertEqual(rsp.to_bytes(), DAT + b'\x00\x0aAAAA')
 
     def test_get_sequence_of_chunks(self):
+        self.proto.file_handler.finished = False
         ack1 = ACK + b'\x00\x0a'
         ack2 = ACK + b'\x00\x0b'
         dat1 = DAT + b'\x00\x0bAAAA'
@@ -143,13 +144,16 @@ class TestRRQProtocol(t.TestCase):
 
     def test_send_last_packet(self):
         self.proto.file_handler.read_chunk = MagicMock(return_value=b'AA')
-        self.proto.file_handler.finished = True
+        self.proto.file_handler.finished = False
         ack1 = ACK + b'\x00\x0a'
+        ack2 = ACK + b'\x00\x0b'
 
         self.proto.datagram_received(ack1, self.addr)
 
         self.proto.transport.sendto.assert_called_with(DAT + b'\x00\x0bAA',
                                                        self.addr)
+        self.proto.file_handler.finished = True
+        self.proto.datagram_received(ack2, self.addr)
         self.assertTrue(self.proto.transport.close.called)
 
     def test_bad_packet(self):
@@ -180,6 +184,7 @@ class TestRRQProtocol(t.TestCase):
         self.assertFalse(self.proto.file_handler.send.called)
 
     def test_roll_over(self):
+        self.proto.file_handler.finished = False
         self.proto.counter = (2 ** 16) - 1
         ack1 = ACK + b'\xff\xff'
         ack2 = ACK + b'\x00\x00'
