@@ -352,6 +352,6 @@ class TFTPServerProtocol(BaseTFTPServerProtocol):
 
     def select_file_handler(self, packet):
         if packet.is_wrq():
-            return file_io.FileWriter
+            return lambda filename, opts: file_io.FileWriter(filename, opts, packet.mode)
         else:
-            return file_io.FileReader
+            return lambda filename, opts: file_io.FileReader(filename, opts, packet.mode)

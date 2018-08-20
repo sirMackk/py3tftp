@@ -1,5 +1,6 @@
 import os
 import os.path as opath
+from .netascii import Netascii
 
 
 def sanitize_fname(fname):
@@ -23,12 +24,15 @@ class FileReader(object):
     When it goes out of scope, it ensures the file is closed.
     """
 
-    def __init__(self, fname, chunk_size=0):
+    def __init__(self, fname, chunk_size=0, mode=None):
         self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
         self._f = None
         self._f = self._open_file()
         self.finished = False
+
+        if mode == b'netascii':
+            self._f = Netascii(self._f)
 
     def _open_file(self):
         return open(self.fname, 'rb')
@@ -58,11 +62,14 @@ class FileWriter(object):
       is less than chunk_size.
     When it goes out of scope, it ensures the file is closed.
     """
-    def __init__(self, fname, chunk_size):
-        self.fname = fname
+    def __init__(self, fname, chunk_size, mode=None):
+        self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
         self._f = None
         self._f = self._open_file()
+
+        if mode == b'netascii':
+            self._f = Netascii(self._f)
 
     def _open_file(self):
         return open(self.fname, 'xb')
