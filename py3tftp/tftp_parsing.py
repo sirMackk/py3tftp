@@ -79,3 +79,8 @@ def timeout_parser(val, lower_bound=1, upper_bound=255):
              '({1} - {2})').format(value, lower_bound, upper_bound))
     else:
         return value
+
+
+def tsize_parser(val, lower_bound=0, upper_bound=None):
+    value = int(val)
+    return value
