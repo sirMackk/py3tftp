@@ -1,5 +1,10 @@
 # CHANGELOG
 
+### 1.1.0 (August 24, 2018)
+
+- Fixes RRQ not waiting for ACK of last package (thanks jpmzometa!)
+- Adds netascii support (thanks keenser!)
+
 ### 1.0.2 (March 05, 2018)
 
 - Fixes KeyError bug with the `-l` CLI option (thanks pritstift!)
