@@ -276,7 +276,38 @@ class RRQProtocol(BaseTFTPProtocol):
         if b'tsize' in self.r_opts:
             self.r_opts[b'tsize'] = self.file_handler.file_size()
 
+    def datagram_received_default(self, data, addr):
+        """
+        Checks correctness of incoming datagrams, reset timers,
+        increments message counter, send next chunk of requested file
+        to client.
+        """
+        packet = self.packet_factory.from_bytes(data)
+        if (self.is_correct_tid(addr) and packet.is_ack() and
+                packet.is_correct_sequence(self.counter)):
+            self.conn_timeout_reset()
+            if self.file_handler.finished:
+                self.transport.close()
+                return
+            self.counter = (self.counter + 1) % 65536
+            packet = self.next_datagram()
+            self.reply_to_client(packet.to_bytes())
+        else:
+            logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
+                data, packet.is_ack(), self.counter))
+
     def datagram_received(self, data, addr):
+        """
+        Checks correctness of incoming datagrams, reset timers,
+        increments message counter, send next chunk of requested file
+        to client.
+        """
+        if self.opts[b'windowsize'] > 1:
+            self.datagram_received_windowsize(data, addr, 
+                        self.opts[b'windowsize'])
+        else:
+            self.datagram_received_default(data, addr)                
+
         """
         Checks correctness of incoming datagrams, reset timers,
         increments message counter, send next chunk of requested file
