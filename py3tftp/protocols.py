@@ -30,6 +30,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.retransmit = None
         self.file_handler = None
         self.finished = False
+        self.retransmits = []
 
     def datagram_received(self, data, addr):
         """
@@ -148,6 +149,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.transport.sendto(packet, self.remote_addr)
         self.retransmit = asyncio.get_event_loop().call_later(
             self.opts[b'ack_timeout'], self.reply_to_client, packet)
+        if self.opts[b'windowsize'] > 1:
+            self.retransmits.append(self.retransmit)
 
     def handle_err_pkt(self):
         """
@@ -283,6 +286,8 @@ class RRQProtocol(BaseTFTPProtocol):
         to client.
         """
         packet = self.packet_factory.from_bytes(data)
+        [retransmit.cancel() for retransmit in self.retransmits]
+        self.retransmits = []
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
@@ -316,6 +321,9 @@ class RRQProtocol(BaseTFTPProtocol):
                 self.counter = (self.counter + 1) % 65536
                 packet = self.next_datagram()
                 self.reply_to_client(packet.to_bytes())
+                if self.file_handler.finished:
+                    self.transport.close()
+                    break
         elif (self.is_correct_tid(addr) and packet.is_ack() and
                 (self.opts[b'windowsize'] > 1)):
             self.counter = packet.block_no
