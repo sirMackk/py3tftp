@@ -296,18 +296,7 @@ class RRQProtocol(BaseTFTPProtocol):
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
 
-    def datagram_received(self, data, addr):
-        """
-        Checks correctness of incoming datagrams, reset timers,
-        increments message counter, send next chunk of requested file
-        to client.
-        """
-        if self.opts[b'windowsize'] > 1:
-            self.datagram_received_windowsize(data, addr, 
-                        self.opts[b'windowsize'])
-        else:
-            self.datagram_received_default(data, addr)                
-
+    def datagram_received_windowsize(self, data, addr, windowsize):
         """
         Checks correctness of incoming datagrams, reset timers,
         increments message counter, send next chunk of requested file
@@ -323,12 +312,32 @@ class RRQProtocol(BaseTFTPProtocol):
             if self.file_handler.finished:
                 self.transport.close()
                 return
-            self.counter = (self.counter + 1) % 65536
-            packet = self.next_datagram()
-            self.reply_to_client(packet.to_bytes())
+            for i in range(self.opts[b'windowsize']):
+                self.counter = (self.counter + 1) % 65536
+                packet = self.next_datagram()
+                self.reply_to_client(packet.to_bytes())
+        elif (self.is_correct_tid(addr) and packet.is_ack() and
+                (self.opts[b'windowsize'] > 1)):
+            self.counter = packet.block_no
+            for i in range(self.opts[b'windowsize']):
+                self.counter = (self.counter + 1) % 65536
+                packet = self.next_datagram()
+                self.reply_to_client(packet.to_bytes())
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
+
+    def datagram_received(self, data, addr):
+        """
+        Checks correctness of incoming datagrams, reset timers,
+        increments message counter, send next chunk of requested file
+        to client.
+        """
+        if self.opts[b'windowsize'] > 1:
+            self.datagram_received_windowsize(data, addr, 
+                        self.opts[b'windowsize'])
+        else:
+            self.datagram_received_default(data, addr)                
 
 
 class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
