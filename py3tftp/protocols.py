@@ -278,6 +278,8 @@ class RRQProtocol(BaseTFTPProtocol):
                                                   self.opts[b'blksize'])
         if b'tsize' in self.r_opts:
             self.r_opts[b'tsize'] = self.file_handler.file_size()
+        if self.opts[b'windowsize'] > 1:
+            self.packets = []
 
     def datagram_received_default(self, data, addr):
         """
@@ -311,25 +313,47 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and packet.is_err()):
             self.handle_err_pkt()
             return
+        [retransmit.cancel() for retransmit in self.retransmits]
+        self.retransmits = []
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
             if self.file_handler.finished:
                 self.transport.close()
                 return
+            self.packets = []
             for i in range(self.opts[b'windowsize']):
                 self.counter = (self.counter + 1) % 65536
                 packet = self.next_datagram()
+                self.packets.append(packet)
                 self.reply_to_client(packet.to_bytes())
                 if self.file_handler.finished:
-                    self.transport.close()
                     break
-        elif (self.is_correct_tid(addr) and packet.is_ack() and
-                (self.opts[b'windowsize'] > 1)):
-            self.counter = packet.block_no
-            for i in range(self.opts[b'windowsize']):
+        elif (self.is_correct_tid(addr) and packet.is_ack()):
+            self.conn_timeout_reset()
+            print('NUMBERS: counter', self.counter,
+                  ' block_no ', packet.block_no)
+            if ((self.counter - windowsize + 1) > packet.block_no) or (
+                    self.counter < packet.block_no):
+                print('ERROR')
+                logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
+                    data, packet.is_ack(), self.counter))
+                newpknum = 0
+            else:
+                cntdif = self.counter - packet.block_no
+                newpknum = windowsize - cntdif
+                self.counter = (self.counter - newpknum + 1)
+            print('New counter: ', self.counter)
+            for i in range(newpknum):
+                if self.file_handler.finished:
+                    break
+                self.packets.pop(0)
                 self.counter = (self.counter + 1) % 65536
                 packet = self.next_datagram()
+                self.packets.append(packet)
+                print('PACKET appended:', packet.to_bytes()[:4])
+            for i, packet in enumerate(self.packets):
+                print('PACKET sent:', packet.to_bytes()[:4])
                 self.reply_to_client(packet.to_bytes())
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(

@@ -128,6 +128,45 @@ class TestRRQWindowsize(unittest.TestCase):
         self.assertEqual(len(self.readme), len(received))
         self.assertTrue(self.readme_md5 == received_md5)
 
+    def test_outofsync_window_acks(self):
+        self.ack_option()
+        recv_block_no = [2, 3, 5, 6, 7, 8, 9, 12]
+        ack_block_no = [2, 3, 5, 5, 7, 10, 9, 12]
+        discard_blocks = [0, 1, 0, 1, 0, 1, 0, 0]
+        ignore_blocks = [0, 0, 0, 1, 0, 1, 0, 0]
+        ignore = 0
+        while True:
+            self.data, server = self.s.recvfrom(1024)
+            block_no = self.data[3]
+            if block_no == recv_block_no[0]:
+                recv_block_no.pop(0)
+                discard = discard_blocks.pop(0)
+                ignore = ignore_blocks.pop(0)
+                self.counter = ack_block_no.pop(0)
+                for i in range(discard):
+                    data, server = self.s.recvfrom(1024)
+                    print("DISCARDED PACKAGE:", data[:4])
+                msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
+                self.s.sendto(msg, server)
+            if ignore:
+                ignore = 0
+                print("IGNORED PACKAGE:", self.data[:4])
+                continue
+            self.output += self.data[4:]
+            self.counter += 1
+            print("WROTE PACKAGE:", self.data[:4])
+
+            if len(self.data[4:]) < 512:
+                self.counter -= 1
+                msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
+                self.s.sendto(msg, server)
+                break
+
+        received = bytes(self.output)
+        received_md5 = hashlib.md5(received).hexdigest()
+        self.assertEqual(len(self.readme), len(received))
+        self.assertTrue(self.readme_md5 == received_md5)
+
 
 if __name__ == '__main__':
     unittest.main()

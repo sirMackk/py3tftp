@@ -124,6 +124,7 @@ class TestRRQProtocol(t.TestCase):
         self.proto.handle_err_pkt = MagicMock()
         self.proto.counter = 10
         self.proto.transport = MagicMock()
+        self.proto.packets = []
 
     def test_get_next_chunk_of_data(self):
         rsp = self.proto.next_datagram()
