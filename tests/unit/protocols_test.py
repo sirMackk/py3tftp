@@ -124,7 +124,6 @@ class TestRRQProtocol(t.TestCase):
         self.proto.handle_err_pkt = MagicMock()
         self.proto.counter = 10
         self.proto.transport = MagicMock()
-        self.proto.packets = []
 
     def test_get_next_chunk_of_data(self):
         rsp = self.proto.next_datagram()
@@ -147,6 +146,7 @@ class TestRRQProtocol(t.TestCase):
     def test_get_next_window_of_data(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
+        self.proto.packets = [None] * 2 
         ack1 = ACK + b'\x00\x0a'
         dat1 = DAT + b'\x00\x0bAAAA'
         dat2 = DAT + b'\x00\x0cAAAA'
@@ -159,6 +159,7 @@ class TestRRQProtocol(t.TestCase):
     def test_get_sequence_of_windows(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
+        self.proto.packets = [None] * 2 
         ack1 = ACK + b'\x00\x0a'
         ack2 = ACK + b'\x00\x0c'
         dat1 = DAT + b'\x00\x0bAAAA'
@@ -216,6 +217,7 @@ class TestRRQProtocol(t.TestCase):
     def test_bad_packet_sequence_starts_new_window(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
+        self.proto.packets = [None] * 2 
         ack1 = ACK + b'\x00\x0a'
         ack2 = ACK + b'\x00\x0b'  # ACK of block_no within window
         dat1 = DAT + b'\x00\x0bAAAA'
