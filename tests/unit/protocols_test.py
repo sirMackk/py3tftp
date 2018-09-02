@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call
 from py3tftp.protocols import (RRQProtocol, TFTPServerProtocol, WRQProtocol)
 from py3tftp.tftp_packet import TFTPPacketFactory
 
-from tests.test_helpers import (ACK, DAT, RRQ, WRQ)
+from tests.test_helpers import (ACK, DAT, RRQ, WRQ, ERR)
 
 
 class TestTFTPServerProtocol(t.TestCase):
@@ -121,6 +121,7 @@ class TestRRQProtocol(t.TestCase):
         self.proto.h_timeout = MagicMock()
         self.proto.file_handler = MagicMock()
         self.proto.file_handler.read_chunk = MagicMock(return_value=b'AAAA')
+        self.proto.handle_err_pkt = MagicMock()
         self.proto.counter = 10
         self.proto.transport = MagicMock()
 
@@ -196,3 +197,9 @@ class TestRRQProtocol(t.TestCase):
 
         calls = [call(dat1, self.addr), call(dat2, self.addr)]
         self.proto.transport.sendto.assert_has_calls(calls)
+
+    def test_err_received(self):
+        err = ERR + b'\x00TFTP Aborted.\x00'
+        self.proto.datagram_received(err, self.addr)
+        self.assertTrue(self.proto.handle_err_pkt.called)
+        self.assertFalse(self.proto.transport.sendto.called)
