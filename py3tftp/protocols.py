@@ -11,6 +11,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
     supported_opts = {
         b'blksize': tftp_parsing.blksize_parser,
         b'timeout': tftp_parsing.timeout_parser,
+        b'tsize': tftp_parsing.tsize_parser,
     }
 
     default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512}
@@ -270,6 +271,8 @@ class RRQProtocol(BaseTFTPProtocol):
         self.counter = 1
         self.file_handler = self.file_handler_cls(self.filename,
                                                   self.opts[b'blksize'])
+        if b'tsize' in self.r_opts:
+            self.r_opts[b'tsize'] = self.file_handler.file_size()
 
     def datagram_received(self, data, addr):
         """

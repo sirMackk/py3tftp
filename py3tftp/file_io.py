@@ -37,6 +37,9 @@ class FileReader(object):
     def _open_file(self):
         return open(self.fname, 'rb')
 
+    def file_size(self):
+        return os.stat(self.fname).st_size
+
     def read_chunk(self, size=None):
         size = size or self.chunk_size
         if self.finished:
