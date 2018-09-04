@@ -12,9 +12,11 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         b'blksize': tftp_parsing.blksize_parser,
         b'timeout': tftp_parsing.timeout_parser,
         b'tsize': tftp_parsing.tsize_parser,
+        b'windowsize': tftp_parsing.windowsize_parser,
     }
 
-    default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512}
+    default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512,
+        b'windowsize': 1}
 
     def __init__(self, packet, file_handler_cls, remote_addr, extra_opts=None):
         self.packet_factory = TFTPPacketFactory(
