@@ -16,7 +16,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
     }
 
     default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512,
-        b'windowsize': 1}
+                    b'windowsize': 1}
 
     def __init__(self, packet, file_handler_cls, remote_addr, extra_opts=None):
         self.packet_factory = TFTPPacketFactory(
@@ -316,7 +316,7 @@ class RRQProtocol(BaseTFTPProtocol):
             self.handle_err_pkt()
             return
         if (self.is_correct_tid(addr) and packet.is_ack() and
-                    self.is_packet_inside_window(packet, windowsize)):
+                self.is_packet_inside_window(packet, windowsize)):
             self.conn_timeout_reset()
             [retransmit.cancel() for retransmit in self.retransmits]
             self.retransmits = []
@@ -353,10 +353,10 @@ class RRQProtocol(BaseTFTPProtocol):
         to client.
         """
         if self.opts[b'windowsize'] > 1:
-            self.datagram_received_windowsize(data, addr, 
-                        self.opts[b'windowsize'])
+            self.datagram_received_windowsize(data, addr,
+                                              self.opts[b'windowsize'])
         else:
-            self.datagram_received_default(data, addr)                
+            self.datagram_received_default(data, addr)
 
 
 class BaseTFTPServerProtocol(asyncio.DatagramProtocol):

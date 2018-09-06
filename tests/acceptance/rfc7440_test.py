@@ -141,9 +141,9 @@ class TestRRQWindowsize(unittest.TestCase):
         self.ack_option()
         # After receiving a certain block number, an ACK with a predefined
         # block number is sent. It is then necessary to indicate if the
-        # following incoming packets are to be discarded or ignored   
-        # The last element on the lists is a dummy, used to get last package 
-        recv_block_no = [2, 3, 5, 6, 7, 8, 9, 0] 
+        # following incoming packets are to be discarded or ignored
+        # The last element on the lists is a dummy, used to get last package
+        recv_block_no = [2, 3, 5, 6, 7, 8, 9, 0]
         ack_block_no = [2, 3, 5, 5, 7, 10, 9, 0]
         discard_blocks = [0, 1, 0, 1, 0, 1, 0]
         ignore_blocks = [0, 0, 0, 1, 0, 1, 0]
