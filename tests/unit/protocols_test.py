@@ -252,3 +252,10 @@ class TestRRQProtocol(t.TestCase):
         self.proto.datagram_received(err, self.addr)
         self.assertTrue(self.proto.handle_err_pkt.called)
         self.assertFalse(self.proto.transport.sendto.called)
+
+    def test_err_received_windowsize(self):
+        err = ERR + b'\x00TFTP Aborted.\x00'
+        self.proto.opts[b'windowsize'] = 2
+        self.proto.datagram_received(err, self.addr)
+        self.assertTrue(self.proto.handle_err_pkt.called)
+        self.assertFalse(self.proto.transport.sendto.called)

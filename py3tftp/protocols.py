@@ -288,6 +288,9 @@ class RRQProtocol(BaseTFTPProtocol):
         to client. Works only for windowsize=1 (default value)
         """
         packet = self.packet_factory.from_bytes(data)
+        if (self.is_correct_tid(addr) and packet.is_err()):
+            self.handle_err_pkt()
+            return
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 packet.is_correct_sequence(self.counter)):
             self.conn_timeout_reset()
