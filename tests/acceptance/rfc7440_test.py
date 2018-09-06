@@ -177,6 +177,25 @@ class TestRRQWindowsize(unittest.TestCase):
         self.assertEqual(len(self.readme), len(received))
         self.assertTrue(self.readme_md5 == received_md5)
 
+    def test_total_timeout(self):
+        self.ack_option()
+        max_msgs = self.windowsize - 1 
+        while True:
+            self.data, server = self.s.recvfrom(1024)
+            if self.counter >= max_msgs:
+                break
+
+            msg = h.ACK + self.counter.to_bytes(2, byteorder='big')
+            self.output += self.data[4:]
+
+            self.s.sendto(msg, server)
+            self.counter += 1
+
+            if len(self.data[4:]) < 512:
+                break
+        received = bytes(self.output)
+        self.assertEqual((max_msgs - 1) * 512, len(received))
+
 
 if __name__ == '__main__':
     unittest.main()

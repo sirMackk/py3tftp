@@ -167,8 +167,12 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         Stops the message retry loop.
         """
-        if self.retransmit:
-            self.retransmit.cancel()
+        if self.opts[b'windowsize'] > 1:
+            [retransmit.cancel() for retransmit in self.retransmits]
+            self.retransmits = []
+        else:
+            if self.retransmit:
+                self.retransmit.cancel()
 
     def conn_reset(self):
         """
@@ -321,8 +325,6 @@ class RRQProtocol(BaseTFTPProtocol):
         if (self.is_correct_tid(addr) and packet.is_ack() and
                 self.is_packet_inside_window(packet, windowsize)):
             self.conn_timeout_reset()
-            [retransmit.cancel() for retransmit in self.retransmits]
-            self.retransmits = []
             if packet.is_correct_sequence(self.counter):
                 if self.file_handler.finished:  # ACK of last package arrived
                     self.transport.close()
