@@ -84,3 +84,18 @@ def timeout_parser(val, lower_bound=1, upper_bound=255):
 def tsize_parser(val, lower_bound=0, upper_bound=None):
     value = int(val)
     return value
+
+
+def windowsize_parser(val, lower_bound=1, upper_bound=65535):
+    """
+    Parses and validates the 'windowsize' option against the RFC 7440.
+    """
+    value = int(val)
+    if value > upper_bound:
+        return value - (value - upper_bound)
+    elif value < lower_bound:
+        raise UnacknowledgedOption(
+            'Requested windowsize "{0}" below RFC-spec limit ({1})'.format(
+                value, lower_bound))
+    else:
+        return value

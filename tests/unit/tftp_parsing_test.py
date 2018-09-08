@@ -2,7 +2,7 @@ import unittest as t
 
 from py3tftp.exceptions import BadRequest, UnacknowledgedOption
 from py3tftp.tftp_parsing import (blksize_parser, parse_req, timeout_parser,
-                                  validate_req)
+                                  windowsize_parser, validate_req)
 
 
 class TestTimeoutParser(t.TestCase):
@@ -44,6 +44,26 @@ class TestBlksizeParser(t.TestCase):
         val = b'\x41'
         with self.assertRaises(ValueError):
             blksize_parser(val)
+
+
+class TestWindowsizeParser(t.TestCase):
+    def test_lower_bound(self):
+        low_val = b'0'
+        with self.assertRaises(UnacknowledgedOption):
+            windowsize_parser(low_val)
+
+    def test_upper_bound_capped(self):
+        high_val = b'70000'
+        self.assertEqual(windowsize_parser(high_val, upper_bound=4096), 4096)
+
+    def test_int_within_acceptable_range(self):
+        val = b'2048'
+        self.assertEqual(windowsize_parser(val), 2048)
+
+    def test_garbage_data(self):
+        val = b'\x41'
+        with self.assertRaises(ValueError):
+            windowsize_parser(val)
 
 
 class TestParseReq(t.TestCase):

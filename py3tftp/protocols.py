@@ -12,9 +12,11 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         b'blksize': tftp_parsing.blksize_parser,
         b'timeout': tftp_parsing.timeout_parser,
         b'tsize': tftp_parsing.tsize_parser,
+        b'windowsize': tftp_parsing.windowsize_parser,
     }
 
-    default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512}
+    default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512,
+                    b'windowsize': 1}
 
     def __init__(self, packet, file_handler_cls, remote_addr, extra_opts=None):
         self.packet_factory = TFTPPacketFactory(
@@ -28,6 +30,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.retransmit = None
         self.file_handler = None
         self.finished = False
+        self.retransmits = []
 
     def datagram_received(self, data, addr):
         """
@@ -146,6 +149,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.transport.sendto(packet, self.remote_addr)
         self.retransmit = asyncio.get_event_loop().call_later(
             self.opts[b'ack_timeout'], self.reply_to_client, packet)
+        if self.opts[b'windowsize'] > 1:
+            self.retransmits.append(self.retransmit)
 
     def handle_err_pkt(self):
         """
@@ -162,8 +167,12 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         Stops the message retry loop.
         """
-        if self.retransmit:
-            self.retransmit.cancel()
+        if self.opts[b'windowsize'] > 1:
+            [retransmit.cancel() for retransmit in self.retransmits]
+            self.retransmits = []
+        else:
+            if self.retransmit:
+                self.retransmit.cancel()
 
     def conn_reset(self):
         """
@@ -273,12 +282,14 @@ class RRQProtocol(BaseTFTPProtocol):
                                                   self.opts[b'blksize'])
         if b'tsize' in self.r_opts:
             self.r_opts[b'tsize'] = self.file_handler.file_size()
+        if self.opts[b'windowsize'] > 1:
+            self.packets = [None] * self.opts[b'windowsize']
 
-    def datagram_received(self, data, addr):
+    def datagram_received_default(self, data, addr):
         """
         Checks correctness of incoming datagrams, reset timers,
         increments message counter, send next chunk of requested file
-        to client.
+        to client. Works only for windowsize=1 (default value)
         """
         packet = self.packet_factory.from_bytes(data)
         if (self.is_correct_tid(addr) and packet.is_err()):
@@ -296,6 +307,61 @@ class RRQProtocol(BaseTFTPProtocol):
         else:
             logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
+
+    def is_packet_inside_window(self, packet, windowsize):
+        return ((packet.block_no > (self.counter - windowsize)) and (
+            packet.block_no <= self.counter))
+
+    def datagram_received_windowsize(self, data, addr, windowsize):
+        """
+        Checks correctness of incoming datagrams, reset timers,
+        increments message counter, send next chunk of requested file
+        to client, and according to the agreed windowsize.
+        """
+        packet = self.packet_factory.from_bytes(data)
+        if (self.is_correct_tid(addr) and packet.is_err()):
+            self.handle_err_pkt()
+            return
+        if (self.is_correct_tid(addr) and packet.is_ack() and
+                self.is_packet_inside_window(packet, windowsize)):
+            self.conn_timeout_reset()
+            if packet.is_correct_sequence(self.counter):
+                if self.file_handler.finished:  # ACK of last package arrived
+                    self.transport.close()
+                    return
+                newpknum = windowsize  # start next window
+            else:  # faulty ACK in current window transmission
+                # TODO: this might not work if the counter rolled over
+                cntdif = self.counter - packet.block_no
+                newpknum = windowsize - cntdif
+                self.counter += 1 - newpknum
+            for i in range(newpknum):
+                if self.file_handler.finished:  # last window
+                    # discard excess packets (older are first in the list)
+                    self.packets = self.packets[-i:]
+                    break
+                # self.packets always contains at most windowsize items
+                self.packets.pop(0)  # discard old packets
+                self.counter = (self.counter + 1) % 65536
+                packet = self.next_datagram()
+                self.packets.append(packet)
+            for packet in self.packets:
+                self.reply_to_client(packet.to_bytes())
+        else:
+            logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
+                data, packet.is_ack(), self.counter))
+
+    def datagram_received(self, data, addr):
+        """
+        Checks correctness of incoming datagrams, reset timers,
+        increments message counter, send next chunk of requested file
+        to client.
+        """
+        if self.opts[b'windowsize'] > 1:
+            self.datagram_received_windowsize(data, addr,
+                                              self.opts[b'windowsize'])
+        else:
+            self.datagram_received_default(data, addr)
 
 
 class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
