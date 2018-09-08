@@ -1,6 +1,6 @@
 # Py3tftp
 
-Py3tftp is an asynchronous [TFTP][1] server written in Python 3.5. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ and _netascii_ modes), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), and part of [RFC 2349][5] (timeout, no tsize). Additionally, it supports block number roll over, so files of any size can be transferred over.
+Py3tftp is an asynchronous [TFTP][1] server written in Python 3.5. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ mode), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), [RFC 2349][5] (timeout, tsize), and [RFC 7440][10] (windowsize) for RRQ. Additionally, it supports block number roll over, so files of any size can be transferred over.
 
 While a toy project, it does adhere to enough of the standards to be useful in real life.
 
@@ -78,15 +78,16 @@ Extending py3tftp is as easy as:
 
 - ~~fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.~~
 - ~~Pull out file reader/writer from protocol classes~~.
-- Add tsize from RFC 2349.
+- ~~Add tsize from RFC 2349~~ (added by schrd).
 - Add ~~blksize~~, ~~timeout~~, and tsize tests.
 - Possibly implement RFCs 906 and 951 for fun!
+- Refactor the code, get rid of some duplication, optimize some low-hanging fruit.
 
 #### LICENSE
 
 The MIT License (MIT)
 
-Copyright (c) 2016 sirMackk
+Copyright (c) 2016-2018 sirMackk
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -116,3 +117,4 @@ SOFTWARE.
 [7]: https://docs.python.org/3/library/asyncio-task.html#task
 [8]: https://www.python.org/dev/peps/pep-0448/
 [9]: http://legacy.python.org/dev/peps/pep-3109/
+[10]: https://tools.ietf.org/html/rfc7440

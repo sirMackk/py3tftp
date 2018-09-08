@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.2.0 (September 08, 2018)
+
+- Adds windowsize option handling for RRQ (many thanks jpmzometa!)
+
 ### 1.1.0 (August 24, 2018)
 
 - Fixes RRQ not waiting for ACK of last package (thanks jpmzometa!)
