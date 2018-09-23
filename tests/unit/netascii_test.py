@@ -5,6 +5,7 @@ import unittest as t
 
 from py3tftp.netascii import Netascii
 
+
 class NetasciiTest(t.TestCase):
     octet_to_netascii = {
         b"\r":     b"\r\x00",
@@ -17,7 +18,7 @@ class NetasciiTest(t.TestCase):
 
     def test_netascii_reader(self):
         for octet, netascii in self.octet_to_netascii.items():
-            for blksize in [1,2,3,4]:
+            for blksize in [1, 2, 3, 4]:
                 octet_buffer = io.BytesIO(octet)
                 netascii_buffer = b''
                 reader = Netascii(octet_buffer)
@@ -31,7 +32,7 @@ class NetasciiTest(t.TestCase):
 
     def test_netascii_writer(self):
         for octet, netascii in self.octet_to_netascii.items():
-            for blksize in [1,2,3,4]:
+            for blksize in [1, 2, 3, 4]:
                 octet_buffer = io.BytesIO()
                 writer = Netascii(octet_buffer)
                 for i in range(0, len(netascii), blksize):

@@ -49,7 +49,6 @@ class TestWindowsize(unittest.TestCase):
         window_rrq = self.window_rrq % windowsize
         self.s.sendto(window_rrq, self.server_addr)
         ock, addr = self.s.recvfrom(32)
-        ack = h.ACK + b'\x00\x00'
         self.assertEqual(h.OCK, ock[:2])
         self.assertIn(b'1234', ock)
 
@@ -179,7 +178,7 @@ class TestRRQWindowsize(unittest.TestCase):
 
     def test_total_timeout(self):
         self.ack_option()
-        max_msgs = self.windowsize - 1 
+        max_msgs = self.windowsize - 1
         while True:
             self.data, server = self.s.recvfrom(1024)
             if self.counter >= max_msgs:

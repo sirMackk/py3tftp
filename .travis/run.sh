@@ -1,4 +1,10 @@
 #! /usr/bin/env bash
+set -e
+
+###
+# Run flake8 before running any tests to fail fast on style problems
+###
+flake8 py3tftp/ tests/
 
 ###
 # Run unit tests and output coverage report

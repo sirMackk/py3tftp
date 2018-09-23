@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, call
 from py3tftp.protocols import (RRQProtocol, TFTPServerProtocol, WRQProtocol)
 from py3tftp.tftp_packet import TFTPPacketFactory
 
-from tests.test_helpers import (ACK, DAT, RRQ, WRQ, ERR)
+from tests.test_helpers import (ACK, DAT, ERR, RRQ, WRQ)
 
 
 class TestTFTPServerProtocol(t.TestCase):
@@ -146,7 +146,7 @@ class TestRRQProtocol(t.TestCase):
     def test_get_next_window_of_data(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
-        self.proto.packets = [None] * 2 
+        self.proto.packets = [None] * 2
         ack1 = ACK + b'\x00\x0a'
         dat1 = DAT + b'\x00\x0bAAAA'
         dat2 = DAT + b'\x00\x0cAAAA'
@@ -159,7 +159,7 @@ class TestRRQProtocol(t.TestCase):
     def test_get_sequence_of_windows(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
-        self.proto.packets = [None] * 2 
+        self.proto.packets = [None] * 2
         ack1 = ACK + b'\x00\x0a'
         ack2 = ACK + b'\x00\x0c'
         dat1 = DAT + b'\x00\x0bAAAA'
@@ -170,7 +170,7 @@ class TestRRQProtocol(t.TestCase):
         self.proto.datagram_received(ack1, self.addr)
         self.proto.datagram_received(ack2, self.addr)
         calls = [call(dat1, self.addr), call(dat2, self.addr),
-                    call(dat3, self.addr), call(dat4, self.addr)]
+                 call(dat3, self.addr), call(dat4, self.addr)]
         self.proto.transport.sendto.assert_has_calls(calls)
 
     def test_send_last_packet(self):
@@ -217,20 +217,20 @@ class TestRRQProtocol(t.TestCase):
     def test_bad_packet_sequence_starts_new_window(self):
         self.proto.file_handler.finished = False
         self.proto.opts[b'windowsize'] = 2
-        self.proto.packets = [None] * 2 
+        self.proto.packets = [None] * 2
         ack1 = ACK + b'\x00\x0a'
         ack2 = ACK + b'\x00\x0b'  # ACK of block_no within window
         dat1 = DAT + b'\x00\x0bAAAA'
         dat2 = DAT + b'\x00\x0cAAAA'
         dat3 = DAT + b'\x00\x0dAAAA'
 
-        # After ACK of block_no \x0a, block_no \x0b and \x0c are sent 
+        # After ACK of block_no \x0a, block_no \x0b and \x0c are sent
         self.proto.datagram_received(ack1, self.addr)
-        # After ACK of block_no \x0b, block_no \x0c and \x0d are sent 
+        # After ACK of block_no \x0b, block_no \x0c and \x0d are sent
         self.proto.datagram_received(ack2, self.addr)
 
         calls = [call(dat1, self.addr), call(dat2, self.addr),
-                    call(dat2, self.addr), call(dat3, self.addr)]
+                 call(dat2, self.addr), call(dat3, self.addr)]
         self.proto.transport.sendto.assert_has_calls(calls)
 
     def test_roll_over(self):

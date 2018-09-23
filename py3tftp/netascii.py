@@ -11,16 +11,19 @@ if isinstance(os.linesep, bytes):
 else:
     NL = os.linesep.encode("ascii")
 
+
 def _multiple_replace(adict):
     rx = re.compile(b'|'.join(map(re.escape, adict)))
+
     @staticmethod
     def _prototype(data):
         return rx.sub(lambda match: adict[match.group(0)], data)
     return _prototype
 
+
 class Netascii:
     from_netascii = _multiple_replace({CRLF: NL, CRNUL: CR})
-    to_netascii = _multiple_replace({NL: CRLF, CR:CRNUL})
+    to_netascii = _multiple_replace({NL: CRLF, CR: CRNUL})
 
     def __init__(self, reader):
         self._reader = reader
@@ -30,7 +33,8 @@ class Netascii:
         buffer_size = 0
         if self._buffer:
             buffer_size = len(self._buffer)
-        data = self._buffer + self.to_netascii(self._reader.read(size - buffer_size))
+        data = self._buffer + self.to_netascii(
+            self._reader.read(size - buffer_size))
         self._buffer = data[size:]
         return data[:size]
 
