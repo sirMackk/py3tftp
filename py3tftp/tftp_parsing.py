@@ -9,6 +9,9 @@ as well as parse filenames.
 """
 
 
+logger = logging.getLogger(__name__)
+
+
 def validate_req(fname, mode, opts, supported_opts=None, default_opts=None):
     """
     Validates an RRQ or WRQ.
@@ -22,15 +25,15 @@ def validate_req(fname, mode, opts, supported_opts=None, default_opts=None):
     acknowledged_options = {}
 
     for option, value in opts.items():
-        logging.debug(option)
+        logger.debug(option)
         if option in supported_opts.keys():
-            logging.debug(option)
+            logger.debug(option)
             try:
                 acknowledged_options[option] = supported_opts[option](value)
             except UnacknowledgedOption as e:
-                logging.debug(e)
+                logger.debug(e)
             except ValueError:
-                logging.debug(
+                logger.debug(
                     ('Client passed malformed option "{0}": "{1}", '
                      'ignoring').format(option, value))
 
@@ -43,7 +46,7 @@ def parse_req(req):
     'filename\x00mode\x00opt1\x00val1\x00optN\x00valN\x00' into a
     filename, a mode, and a dictionary of option:values.
     """
-    logging.debug("Request: {}".format(req))
+    logger.debug("Request: {}".format(req))
     try:
         fname, mode, *opts = [item for item in req.split(b'\x00') if item]
     except ValueError:
