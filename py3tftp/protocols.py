@@ -7,6 +7,9 @@ from py3tftp.exceptions import ProtocolException
 from py3tftp.tftp_packet import TFTPPacketFactory
 
 
+logger = logging.getLogger(__name__)
+
+
 class BaseTFTPProtocol(asyncio.DatagramProtocol):
     supported_opts = {
         b'blksize': tftp_parsing.blksize_parser,
@@ -64,7 +67,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         access the requested file - and handles possible file errors - as well
         as handling option negotiation (if applicable).
         """
-        logging.debug('Initializing file transfer to {addr}'.format(
+        logger.debug('Initializing file transfer to {addr}'.format(
             addr=self.remote_addr))
         try:
             self.set_proto_attributes()
@@ -77,18 +80,18 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
             else:
                 pkt = self.next_datagram()
         except FileExistsError:
-            logging.error('"{}" already exists! Cannot overwrite'.format(
+            logger.error('"{}" already exists! Cannot overwrite'.format(
                 self.filename))
             pkt = self.packet_factory.err_file_exists()
         except PermissionError:
-            logging.error('Insufficient permissions to operate on "{}"'.format(
+            logger.error('Insufficient permissions to operate on "{}"'.format(
                 self.filename))
             pkt = self.packet_factory.err_access_violation()
         except FileNotFoundError:
-            logging.error('File "{}" does not exist!'.format(self.filename))
+            logger.error('File "{}" does not exist!'.format(self.filename))
             pkt = self.packet_factory.err_file_not_found()
 
-        logging.debug('opening pkt: {}'.format(pkt))
+        logger.debug('opening pkt: {}'.format(pkt))
         self.send_opening_packet(pkt.to_bytes())
 
         if pkt.is_err():
@@ -103,7 +106,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         self.filename = self.packet.fname
         self.r_opts = self.packet.r_opts
         self.opts = {**self.default_opts, **self.extra_opts, **self.r_opts}
-        logging.debug(
+        logger.debug(
             'Set protocol attributes as {attrs}'.format(attrs=self.opts))
 
     def connection_lost(self, exc):
@@ -113,11 +116,11 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         self.conn_reset()
         if exc:
-            logging.error(
+            logger.error(
                 'Error on connection lost: {0}.\nTraceback: {1}'.format(
                     exc, exc.__traceback__))
         else:
-            logging.info('Connection to {0}:{1} terminated'.format(
+            logger.info('Connection to {0}:{1} terminated'.format(
                 *self.remote_addr))
 
     def error_received(self, exc):
@@ -128,7 +131,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
         self.conn_reset()
         self.transport.close()
-        logging.error(
+        logger.error(
             ('Error receiving packet from {0}: {1}. '
              'Transfer of "{2}" aborted.\nTraceback: {3}').format(
                  self.remote_addr, exc, self.filename, exc.__traceback__))
@@ -157,7 +160,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         Cleans up connection after sending a courtesy error packet
         to offending client.
         """
-        logging.info(('Closing connection to {0} due to error. '
+        logger.info(('Closing connection to {0} due to error. '
                       '"{1}" Not transmitted.').format(self.remote_addr,
                                                        self.filename))
         self.conn_reset()
@@ -187,7 +190,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         Cleans up timers and the connection when called.
         """
 
-        logging.error(
+        logger.error(
             'Connection to {0} timed out, "{1}" not transfered'.format(
                 self.remote_addr, self.filename))
         self.retransmit_reset()
@@ -211,7 +214,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         if self.remote_addr[1] == addr[1]:
             return True
         else:
-            logging.info(
+            logger.info(
                 'Unknown transfer id: expected {0}, got {1} instead.'.format(
                     self.remote_addr, addr))
             err_response = self.packet_factory.err_unknown_tid()
@@ -222,7 +225,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 class WRQProtocol(BaseTFTPProtocol):
     def __init__(self, wrq, file_handler_cls, addr, opts):
         super().__init__(wrq, file_handler_cls, addr, opts)
-        logging.info('Initiating WRQProtocol with {0}'.format(
+        logger.info('Initiating WRQProtocol with {0}'.format(
             self.remote_addr))
 
     def next_datagram(self):
@@ -255,19 +258,19 @@ class WRQProtocol(BaseTFTPProtocol):
             self.file_handler.write_chunk(packet.data)
 
             if packet.size < self.opts[b'blksize']:
-                logging.info('Receiving file "{0}" from {1} completed'.format(
+                logger.info('Receiving file "{0}" from {1} completed'.format(
                     self.filename, self.remote_addr))
                 self.retransmit_reset()
                 self.transport.close()
         else:
-            logging.debug('Data: {0}; is_data: {1}; counter: {2}'.format(
+            logger.debug('Data: {0}; is_data: {1}; counter: {2}'.format(
                 data, packet.is_data(), self.counter))
 
 
 class RRQProtocol(BaseTFTPProtocol):
     def __init__(self, rrq, file_handler_cls, addr, opts):
         super().__init__(rrq, file_handler_cls, addr, opts)
-        logging.info('Initiating RRQProtocol with {0}'.format(
+        logger.info('Initiating RRQProtocol with {0}'.format(
             self.remote_addr))
 
     def next_datagram(self):
@@ -305,7 +308,7 @@ class RRQProtocol(BaseTFTPProtocol):
             packet = self.next_datagram()
             self.reply_to_client(packet.to_bytes())
         else:
-            logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
+            logger.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
 
     def is_packet_inside_window(self, packet, windowsize):
@@ -348,7 +351,7 @@ class RRQProtocol(BaseTFTPProtocol):
             for packet in self.packets:
                 self.reply_to_client(packet.to_bytes())
         else:
-            logging.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
+            logger.debug('Ack: {0}; is_ack: {1}; counter: {2}'.format(
                 data, packet.is_ack(), self.counter))
 
     def datagram_received(self, data, addr):
@@ -387,7 +390,7 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         raise NotImplementedError
 
     def connection_made(self, transport):
-        logging.info('Listening...')
+        logger.info('Listening...')
         self.transport = transport
 
     def datagram_received(self, data, addr):
@@ -395,7 +398,7 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         Opens a read or write connection to remote host by scheduling
         an asyncio.Protocol.
         """
-        logging.debug('received: {}'.format(data.decode()))
+        logger.debug('received: {}'.format(data.decode()))
 
         first_packet = self.packet_factory.from_bytes(data)
         protocol = self.select_protocol(first_packet)
@@ -409,12 +412,12 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
         self.loop.create_task(connect)
 
     def connection_lost(self, exc):
-        logging.info('TFTP server - connection lost')
+        logger.info('TFTP server - connection lost')
 
 
 class TFTPServerProtocol(BaseTFTPServerProtocol):
     def select_protocol(self, packet):
-        logging.debug('packet type: {}'.format(packet.pkt_type))
+        logger.debug('packet type: {}'.format(packet.pkt_type))
         if packet.is_rrq():
             return RRQProtocol
         elif packet.is_wrq():
