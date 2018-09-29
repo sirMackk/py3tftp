@@ -161,8 +161,8 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         to offending client.
         """
         logger.info(('Closing connection to {0} due to error. '
-                      '"{1}" Not transmitted.').format(self.remote_addr,
-                                                       self.filename))
+                     '"{1}" Not transmitted.').format(self.remote_addr,
+                                                      self.filename))
         self.conn_reset()
         asyncio.get_event_loop().call_soon(self.transport.close)
 

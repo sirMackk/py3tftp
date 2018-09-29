@@ -1,8 +1,15 @@
 # CHANGELOG
 
+### 1.2.1 (September 29, 2018)
+
+- Change logger to module logger (thanks schrd!)
+- Add flake8 to tests; Fix style issues; Make travis fail on test errors.
+
 ### 1.2.0 (September 08, 2018)
 
 - Adds windowsize option handling for RRQ (many thanks jpmzometa!)
+- Adds tsize option for RRQ (thanks schrd!)
+- handle error packets if client aborts RRQ transfer (thanks schrd!)
 
 ### 1.1.0 (August 24, 2018)
 
