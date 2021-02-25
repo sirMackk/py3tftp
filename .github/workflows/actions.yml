@@ -1,0 +1,21 @@
+name: Run Python tests
+on: [push]
+jobs:
+  verify:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest] # TODO: add 'windows-latest'
+        python-version: ['3.5'] # TODO: add '3.9'
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # Install packages
+      - run: pip install coverage==4.1 flake8==3.5.0
+
+      # Run tests
+      - run: .github/workflows/test.sh
