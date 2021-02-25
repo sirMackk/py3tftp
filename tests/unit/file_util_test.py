@@ -93,11 +93,8 @@ class FileWriterTest(t.TestCase):
 class TestSanitizeFname(t.TestCase):
     @classmethod
     def setUpClass(cls):
-        from os import getcwd
-        from os.path import join as path_join
-        cls.target_dir = bytes(
-            path_join(getcwd(), 'tmp/testfile'),
-            encoding='ascii')
+        from pathlib import Path
+        cls.target_dir = Path.cwd() / 'tmp/testfile'
 
     def test_under_root_dir(self):
         fname = b'/tmp/testfile'
