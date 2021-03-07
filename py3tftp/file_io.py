@@ -1,5 +1,5 @@
 import os
-import os.path as opath
+from pathlib import Path
 from .netascii import Netascii
 
 
@@ -7,11 +7,21 @@ def sanitize_fname(fname):
     """
     Ensures that fname is a path under the current working directory.
     """
-    root_dir = os.getcwd()
-    return opath.join(
-        bytes(root_dir, encoding='ascii'),
-        opath.normpath(
-            b'/' + fname).lstrip(b'/'))
+    # Remove root (/) and parent (..) directory references.
+    path = os.fsdecode(fname).lstrip('./')
+    abs_path = Path.cwd() / path
+
+    # Verify that the formed path is under the current working directory.
+    try:
+        abs_path.relative_to(Path.cwd())
+    except ValueError:
+        raise FileNotFoundError
+
+    # Verify that we are not accesing a reserved file.
+    if abs_path.is_reserved():
+        raise FileNotFoundError
+
+    return abs_path
 
 
 class FileReader(object):
@@ -25,9 +35,9 @@ class FileReader(object):
     """
 
     def __init__(self, fname, chunk_size=0, mode=None):
+        self._f = None
         self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
-        self._f = None
         self._f = self._open_file()
         self.finished = False
 
@@ -35,10 +45,10 @@ class FileReader(object):
             self._f = Netascii(self._f)
 
     def _open_file(self):
-        return open(self.fname, 'rb')
+        return self.fname.open('rb')
 
     def file_size(self):
-        return os.stat(self.fname).st_size
+        return self.fname.stat().st_size
 
     def read_chunk(self, size=None):
         size = size or self.chunk_size
@@ -66,16 +76,16 @@ class FileWriter(object):
     When it goes out of scope, it ensures the file is closed.
     """
     def __init__(self, fname, chunk_size, mode=None):
+        self._f = None
         self.fname = sanitize_fname(fname)
         self.chunk_size = chunk_size
-        self._f = None
         self._f = self._open_file()
 
         if mode == b'netascii':
             self._f = Netascii(self._f)
 
     def _open_file(self):
-        return open(self.fname, 'xb')
+        return self.fname.open('xb')
 
     def _flush(self):
         if self._f:
