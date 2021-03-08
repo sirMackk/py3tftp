@@ -22,6 +22,7 @@ setup(
     version=__version__,
     description='Python 3 asynchronous TFTP server.',
     long_description=readme(),
+    long_description_content_type='text/markdown',
     url='http://github.com/sirMackk/py3tftp',
     author='Matt O.',
     author_email='matt@mattscodecave.com',

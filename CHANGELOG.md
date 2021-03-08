@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.2.2 (March 08, 2021)
+
+- Improve filename sanitize to work on Windows (many thanks pkorpine) - https://github.com/sirMackk/py3tftp/pull/15
+
 ### 1.2.1 (September 29, 2018)
 
 - Change logger to module logger (thanks schrd!)
