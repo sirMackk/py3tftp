@@ -1,6 +1,6 @@
 # Py3tftp
 
-Py3tftp is an asynchronous [TFTP][1] server written in Python 3.5. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ mode), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), [RFC 2349][5] (timeout, tsize), and [RFC 7440][10] (windowsize) for RRQ. Additionally, it supports block number roll over, so files of any size can be transferred over.
+Py3tftp is an asynchronous [TFTP][1] server written in Python 3. It was written for the pure joy of working with Python 3 and implements [RFC 1350][2] (except _mail_ mode), [RFC 2347][3] (options), [RFC 2348][4] (blksize option), [RFC 2349][5] (timeout, tsize), and [RFC 7440][10] (windowsize) for RRQ. Additionally, it supports block number roll over, so files of any size can be transferred over.
 
 While a toy project, it does adhere to enough of the standards to be useful in real life.
 
@@ -10,6 +10,13 @@ Some Py3k stuff it uses:
 - [New unpacking methods][8] - some sweet stuff right there (3.5+)
 - [Tracebacks attached to exceptions][9] - woo!
 - Strings are now bytes because all text is unicode
+
+
+**This project is in maintenance mode!**
+
+It is not actively developed, but it provides a solid minimum set of functionality and works on Python versions 3.5 though 3.9.
+
+If you would like more functionality or if you find a bug, please open a PR :). 
 
 ### Installation
 
@@ -76,6 +83,8 @@ Extending py3tftp is as easy as:
 
 #### Roadplan
 
+(Note, this hasn't been updated in a few years)
+
 - ~~fix off-by-one blksize error ie. if you transfer a file 1000 bytes long and set blksize to 1000 bytes, the server won't ack it.~~
 - ~~Pull out file reader/writer from protocol classes~~.
 - ~~Add tsize from RFC 2349~~ (added by schrd).
@@ -87,7 +96,7 @@ Extending py3tftp is as easy as:
 
 The MIT License (MIT)
 
-Copyright (c) 2016-2018 sirMackk
+Copyright (c) 2016-2021 sirMackk
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
