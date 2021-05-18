@@ -36,12 +36,12 @@ def parse_cli_arguments():
               'requires superuser privileges.'))
     parser.add_argument(
         '--ack-timeout',
+        dest="timeout",
         default=0.5,
         type=float,
         help='Timeout for each ACK of the lock-step. Default: 0.5.')
     parser.add_argument(
         '--conn-timeout',
-        dest="timeout",
         default=3.0,
         type=float,
         help=('Timeout before the server gives up on a transfer and closes '
