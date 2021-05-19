@@ -18,7 +18,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         b'windowsize': tftp_parsing.windowsize_parser,
     }
 
-    default_opts = {b'ack_timeout': 0.5, b'timeout': 5.0, b'blksize': 512,
+    default_opts = {b'timeout': 0.5, b'conn_timeout': 5.0, b'blksize': 512,
                     b'windowsize': 1}
 
     def __init__(self, packet, file_handler_cls, remote_addr, extra_opts=None):
@@ -142,16 +142,16 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
         """
         self.reply_to_client(packet)
         self.h_timeout = asyncio.get_event_loop().call_later(
-            self.opts[b'timeout'], self.conn_timeout)
+            self.opts[b'conn_timeout'], self.conn_timeout)
 
     def reply_to_client(self, packet):
         """
         Starts the message retry loop, resending packet to self.remote_addr
-        every 'ack_timeout'.
+        every 'timeout'.
         """
         self.transport.sendto(packet, self.remote_addr)
         self.retransmit = asyncio.get_event_loop().call_later(
-            self.opts[b'ack_timeout'], self.reply_to_client, packet)
+            self.opts[b'timeout'], self.reply_to_client, packet)
         if self.opts[b'windowsize'] > 1:
             self.retransmits.append(self.retransmit)
 
@@ -203,7 +203,7 @@ class BaseTFTPProtocol(asyncio.DatagramProtocol):
 
         self.conn_reset()
         self.h_timeout = asyncio.get_event_loop().call_later(
-            self.opts[b'timeout'], self.conn_timeout)
+            self.opts[b'conn_timeout'], self.conn_timeout)
 
     def is_correct_tid(self, addr):
         """
