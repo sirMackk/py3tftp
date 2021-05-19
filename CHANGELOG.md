@@ -1,5 +1,9 @@
 # CHANGELOG
 
+### 1.3.0 (May 18, 2021)
+
+- Fix timeout interval handling (many thanks pkropine) - https://github.com/sirMackk/py3tftp/pull/17
+
 ### 1.2.2 (March 08, 2021)
 
 - Improve filename sanitize to work on Windows (many thanks pkorpine) - https://github.com/sirMackk/py3tftp/pull/15
