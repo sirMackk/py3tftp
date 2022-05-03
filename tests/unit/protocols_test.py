@@ -32,6 +32,7 @@ class TestTFTPServerProtocol(t.TestCase):
         mock_loop.create_task.return_value = True
 
         proto = TFTPServerProtocol('127.0.0.1', mock_loop, {})
+        proto.transport = MagicMock()
 
         proto.datagram_received(data, ('127.0.0.1', 0,))
         self.assertTrue(mock_loop.create_datagram_endpoint.called)

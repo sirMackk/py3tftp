@@ -406,8 +406,7 @@ class BaseTFTPServerProtocol(asyncio.DatagramProtocol):
 
         connect = self.loop.create_datagram_endpoint(
             lambda: protocol(data, file_handler_cls, addr, self.extra_opts),
-            local_addr=(self.host_interface,
-                        0, ))
+            sock=self.transport.get_extra_info('socket'))
 
         self.loop.create_task(connect)
 
